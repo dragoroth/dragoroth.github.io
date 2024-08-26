@@ -50,6 +50,20 @@ body {
     transition: background 0.3s ease;
 }
 
+.btn {
+    cursor: pointer; border: 1px solid rgb(138, 138, 138); font-size: 13px; color: rgb(255, 255, 255); padding: 10px 30px; transition: 2731ms; width: 335px; box-shadow: rgba(0, 0, 0, 0.15) 0px 2px 8px; border-radius: 50px; background: linear-gradient(325deg, rgb(0, 195, 255) 0%, rgb(0, 139, 181) 28%); --hover-bgc: #00c3ff; --hover-borderc: #f5f5f5;
+}
+                            
+                            
+.btn:hover{                                 
+    color: rgb(255, 255, 255);
+    width: 337px;
+    background: rgb(0, 195, 255);
+    border-color: rgb(245, 245, 245);
+    border-width: 2px;
+    border-style: solid;
+}
+
 .button_startscan {
     width: 200px;
     height: 80px;
