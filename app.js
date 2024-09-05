@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function () {
     qrScanner = new QrScanner(video, result => {
         console.log('decoded qr code:', result);
         if (result.data !== lastDecodedText) {
+            //console.log('new qr!');
             lastDecodedText = result.data; // Update the last decoded text
             handleScannedLink(result.data);
         }
@@ -63,9 +64,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
             document.getElementById('video-id').textContent = youtubeLinkData.videoId;  
 
-            console.log(youtubeLinkData.videoId);
-            player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);   
-            
+            console.log("Queing video:", youtubeLinkData.videoId, ", Starting at ", youtubeLinkData.startTime);
+            player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
         }
         
     }
@@ -162,12 +162,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (match) {
             const queryParams = new URLSearchParams(match[4]); // Correctly capture and parse the query string part of the URL
             const videoId = match[2];
+            console.log(queryParams);
             let startTime = queryParams.get('start') || queryParams.get('t');
             const endTime = queryParams.get('end');
     
             // Normalize and parse 't' and 'start' parameters
             startTime = normalizeTimeParameter(startTime);
             const parsedEndTime = normalizeTimeParameter(endTime);
+            if (startTime == null) startTime = 0;
     
             return { videoId, startTime, endTime: parsedEndTime };
         }
@@ -217,6 +219,7 @@ function onPlayerReady(event) {
 
 // Display video information when it's cued
 function onPlayerStateChange(event) {
+    console.log('playerStateChange to ', event.data, YT.PlayerState);
     if (event.data == YT.PlayerState.CUED) {
         document.getElementById('startstop-video').style.background = "green";
         // Display title and duration
@@ -347,13 +350,16 @@ document.getElementById('cancelScanButton').addEventListener('click', function()
     document.getElementById('cancelScanButton').style.display = 'none'; // Hide the cancel-button
 });
 
+let settingsvisible = false;
 document.getElementById('cb_settings').addEventListener('click', function() {
     var cb = document.getElementById('cb_settings');
-    if (cb.checked == true) {
+    if (settingsvisible == false) {
         document.getElementById('settings_div').style.display = 'block';
+        settingsvisible = true;
     }
     else {
         document.getElementById('settings_div').style.display = 'none';
+        settingsvisible = false;
     }
 });
 
