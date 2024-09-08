@@ -136,12 +136,52 @@ nav {
     font-size: 2rem;
 }
 
+.timer-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 10px solid #277594;
+    position: absolute;
+    font-size: 2rem;
+    visibility: hidden;
+}
+
+/* Sets the containers height and width */
+.base-timer {
+    position: absolute;
+    height: 100px;
+    width: 100px;
+  }
+  
+  /* Removes SVG styling that would hide the time label */
+  .base-timer__circle {
+    fill: none;
+    stroke: none;
+  }
+  
+  /* The SVG path that displays the timer's progress */
+  .base-timer__path-elapsed {
+    stroke-width: 7px;
+    stroke: #277594;
+  }
+
+  .base-timer__path-remaining {
+    stroke-width: 7px;
+    stroke-linecap: round;
+    /*transform: rotate(90deg);
+    transform-origin: center;
+    transition: 1s linear all;*/
+    fill-rule: nonzero;
+    stroke: #70afc4;
+  }
+
 .outer-circle {
     position: absolute;
     border-radius: 50%;
     border: 2px solid #87ceeb;
     animation: pulsate 3s infinite;
     animation-timing-function: linear;
+    visibility: hidden;
 }
 
 .outer-circle:nth-child(2) {
