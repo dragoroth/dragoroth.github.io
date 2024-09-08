@@ -230,12 +230,13 @@ function onPlayerStateChange(event) {
         // Check for Autoplay
         if (document.getElementById('autoplay').checked == true) {
             document.getElementById('startstop-video').innerHTML = "Stop";
-            if (document.getElementById('randomplayback').checked == true) {
+            playVideoWithSettingsOptions();
+            /*if (document.getElementById('randomplayback').checked == true) {
                 playVideoAtRandomStartTime();
             }
             else {
             player.playVideo();
-            }
+            }*/
         }
     }
     else if (event.data == YT.PlayerState.PLAYING) {
@@ -243,6 +244,11 @@ function onPlayerStateChange(event) {
     }
     else if (event.data == YT.PlayerState.PAUSED | event.data == YT.PlayerState.ENDED) {
         document.getElementById('startstop-video').style.background = "green";
+        var pulsingCircles = document.getElementsByClassName('outer-circle');
+        for(var i = 0; i < pulsingCircles.length; i++){
+            pulsingCircles[i].style.visibility = "hidden";
+        }
+        timePassed = playbackDuration - 1;
     }
     else if (event.data == YT.PlayerState.BUFFERING) {
         document.getElementById('startstop-video').style.background = "orange";
@@ -260,20 +266,64 @@ function formatDuration(duration) {
 document.getElementById('startstop-video').addEventListener('click', function() {
     if (this.innerHTML == "Play") {
         this.innerHTML = "Stop";
-        if (document.getElementById('randomplayback').checked == true) {
-            playVideoAtRandomStartTime();
+        playVideoWithSettingsOptions();
+        /*if (document.getElementById('randomplayback').checked == true) {
+            
         }
         else {
             player.playVideo();
-        }
+        }*/
     }
     else {
         this.innerHTML = "Play";
         player.pauseVideo();
+        var pulsingCircles = document.getElementsByClassName('outer-circle');
+        for(var i = 0; i < pulsingCircles.length; i++){
+            pulsingCircles[i].style.visibility = "hidden";
+        }
+        timePassed = playbackDuration - 1;
     }
 });
 
-function playVideoAtRandomStartTime() {
+//Timer ring
+const FULL_DASH_ARRAY = 283;
+let timePassed = 0;
+let timeLeft = 30;
+let timerInterval = null;
+
+function onTimesUp() {
+    clearInterval(timerInterval);
+    timePassed = 0;
+}
+  
+function startTimer() {
+    timerInterval = setInterval(() => {
+      timePassed = timePassed += 1;
+      timeLeft = playbackDuration - timePassed;
+      if (timeLeft < 0) timeLeft = 0;
+      setCircleDasharray();
+  
+      if (timeLeft <= 0) {
+        onTimesUp();
+      }
+    }, 1000);
+}
+function setCircleDasharray() {
+    const circleDasharray = `${(
+      calculateTimeFraction() * FULL_DASH_ARRAY
+    ).toFixed(0)} 283`;
+    document
+      .getElementById("base-timer-path-remaining")
+      .setAttribute("stroke-dasharray", circleDasharray);
+}
+
+function calculateTimeFraction() {
+    const rawTimeFraction = timeLeft / playbackDuration;
+    return rawTimeFraction - (1 / playbackDuration) * (1 - rawTimeFraction);
+  }
+  
+
+function playVideoWithSettingsOptions() {
     const minStartPercentage = 0.10;
     const maxEndPercentage = 0.90;
     let videoDuration = player.getDuration()
@@ -300,16 +350,30 @@ function playVideoAtRandomStartTime() {
     }
 
     // Cue video at calculated start time and play
-    console.log("play random", startTime, endTime)
-    player.seekTo(startTime, true);
+    if (document.getElementById('randomplayback').checked == true) {
+        console.log("play random", startTime, endTime)
+        player.seekTo(startTime, true);
+    }
+
     player.playVideo();
 
-    clearTimeout(playbackTimer); // Clear any existing timer
-    // Schedule video stop after the specified duration
-    playbackTimer = setTimeout(() => {
-        player.pauseVideo();
-        document.getElementById('startstop-video').innerHTML = "Play";
-    }, (endTime - startTime) * 1000); // Convert to milliseconds
+    var pulsingCircles = document.getElementsByClassName('outer-circle');
+    for(var i = 0; i < pulsingCircles.length; i++){
+        pulsingCircles[i].style.visibility = "visible";
+    }
+
+    if (document.getElementById('playback-duration-limit').checked == true) {
+        startTimer();
+        clearTimeout(playbackTimer); // Clear any existing timer
+        // Schedule video stop after the specified duration
+        playbackTimer = setTimeout(() => {
+            player.pauseVideo();
+            document.getElementById('startstop-video').innerHTML = "Play";
+            for(var i = 0; i < pulsingCircles.length; i++){
+                pulsingCircles[i].style.visibility = "hidden";
+            }
+        }, (endTime - startTime) * 1000); // Convert to milliseconds
+    }
 }
 
 // Assuming you have an element with the ID 'qr-reader' for the QR scanner
@@ -368,6 +432,16 @@ document.getElementById('randomplayback').addEventListener('click', function() {
     listCookies();
 });
 
+document.getElementById('playback-duration-limit').addEventListener('click', function() {
+    document.cookie = "PlaybackTimeLimitChecked=" + this.checked + ";max-age=2592000"; //30 Tage
+    listCookies();
+});
+
+document.getElementById('playback-duration').addEventListener('change', function() {
+    document.cookie = "PlaybackTimeLimitValue=" + this.value + ";max-age=2592000"; //30 Tage
+    listCookies();
+});
+
 document.getElementById('autoplay').addEventListener('click', function() {
     document.cookie = "autoplayChecked=" + this.checked + ";max-age=2592000"; //30 Tage
     listCookies();
@@ -405,6 +479,14 @@ function getCookies() {
     if (getCookieValue("autoplayChecked") != "") {
         isTrueSet = (getCookieValue("autoplayChecked") === 'true');
         document.getElementById('autoplay').checked = isTrueSet;  
+    }
+    if (getCookieValue("PlaybackTimeLimitChecked") != "") {
+        isTrueSet = (getCookieValue("PlaybackTimeLimitChecked") === 'true');
+        document.getElementById('playback-duration-limit').checked = isTrueSet;  
+    }
+    if (getCookieValue("PlaybackTimeLimitValue") != "") {
+        var timeLimitValue = (getCookieValue("PlaybackTimeLimitValue"));
+        document.getElementById('playback-duration').value = timeLimitValue;  
     }
     listCookies();
 }
