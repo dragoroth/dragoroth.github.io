@@ -76,6 +76,10 @@ nav {
     /*background: #eb87da;*/
 }
 
+.credits_div {
+    display: none;
+}
+
 #menu-toggle:checked + .menu-icon + .menu {
     right: 0;
 }
