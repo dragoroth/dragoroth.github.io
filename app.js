@@ -285,6 +285,10 @@ document.getElementById('startstop-video').addEventListener('click', function() 
     }
 });
 
+document.getElementById('menu-home-button').addEventListener('click', function() {
+    document.getElementById('menu-toggle').checked = false;
+});
+
 //Timer ring
 const FULL_DASH_ARRAY = 283;
 let timePassed = 0;
@@ -424,6 +428,20 @@ document.getElementById('cb_settings').addEventListener('click', function() {
     else {
         document.getElementById('settings_div').style.display = 'none';
         settingsvisible = false;
+    }
+});
+
+let creditsvisible = false;
+document.getElementById('credits').addEventListener('click', function() {
+    if (creditsvisible == false)
+    {
+        document.getElementById('credits_div').style.display = 'block';
+        creditsvisible = true;
+    }
+    else
+    {
+        document.getElementById('credits_div').style.display = 'none';
+        creditsvisible = false;
     }
 });
 
