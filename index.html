@@ -49,7 +49,7 @@
                         <label for="playback-duration-limit">Wiedergabezeit begrenzen</label>
                         <br/>
                         <label for="playback-duration" style="margin-left: 25px;">auf (s): </label>
-                        <input type="number" id="playback-duration" value="30">
+                        <input type="number" min="5" id="playback-duration" value="30">
                     </li>
                     <li>
                         <input id="songinfo" type="checkbox" name="songinfo">
@@ -78,6 +78,10 @@
             <button id="cancelScanButton" class="scan-button">Cancel Scan</button>
             <video id="qr-video"></video>
         </div>
+        <div class="alert" id="alertBox" onclick="this.style.display='none';" style="display: none;">
+            This is an alert box.
+        </div>
+        <!--<div id="alertHideProgressbar" style="background-color: brown;"><div id="inner"></div></div>-->
         <section class="audiogram">
             <div class="pulsating-circle">
                 <div class="inner-circle">🎵</div>
@@ -106,13 +110,18 @@
                 <div class="outer-circle"></div>
             </div>
         </section>
+        <div class="mainButtons">
+            <button id="startScanButton"  class="scan-button">Scan</button>
+            <button id="startstop-video"  class="scan-button">Play</button>
+        </div>
+        <div class="videoInfo">
+            <div id="videoid">Video ID: <span id="video-id"></span></div>
+            <div id="videotitle">Video Title: <span id="video-title"></span></div>
+            <div id="videoduration">Video Duration: <span id="video-duration"></span></div>
+        </div>
     </main>
     <footer>
-        <button id="startScanButton"  class="scan-button">Scan</button>
-        <button id="startstop-video"  class="scan-button">Play</button>
-        <div id="videoid">Video ID: <span id="video-id"></span></div>
-        <div id="videotitle">Video Title: <span id="video-title"></span></div>
-        <div id="videoduration">Video Duration: <span id="video-duration"></span></div>
+        
     </footer>
     <div id="player"></div> <!-- Load YouTube Player -->
 
