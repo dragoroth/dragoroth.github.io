@@ -30,8 +30,10 @@ document.addEventListener('DOMContentLoaded', function () {
     async function handleScannedLink(decodedText) {
         let youtubeURL = "";
         if (isYoutubeLink(decodedText)) {
+            console.log("IsYoutubeLink");
             youtubeURL = decodedText;
         } else if (isHitsterLink(decodedText)) {
+            console.log("IsHitsterLink");
             const hitsterData = parseHitsterUrl(decodedText);
             if (hitsterData) {
                 console.log("Hitster data:", hitsterData.id, hitsterData.lang);
@@ -73,6 +75,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function isHitsterLink(url) {
         // Regular expression to match with or without "http://" or "https://"
         const regex = /^(?:http:\/\/|https:\/\/)?(www\.hitstergame|app\.hitsternordics)\.com\/.+/;
+        console.log("test if hitster link, result: ", regex.test(url));
         return regex.test(url);
     }
 
@@ -265,6 +268,22 @@ function formatDuration(duration) {
 // Add event listeners to Play and Stop buttons
 document.getElementById('startstop-video').addEventListener('click', function() {
     if (this.innerHTML == "Play") {
+        if (this.style.background != "green")
+        {
+            document.getElementById('alertBox').innerText = "Please do a scan first!";
+            document.getElementById('alertBox').style.display = "block";
+            /*var progressbar = document.getElementById('alertHideProgressbar');
+            var progressbarinner = document.getElementById('inner');
+            progressbarinner.style.animationDuration = '2s';
+            if (typeof(callback) === 'function') {
+                progressbarinner.addEventListener('animationend', callback);
+            }
+            progressbarinner.style.animationPlayState = 'running';*/
+            setTimeout(() => {
+                document.getElementById('alertBox').style.display = "none";
+            }, 2000); // hide after ms
+            return;
+        }
         this.innerHTML = "Stop";
         playVideoWithSettingsOptions();
         /*if (document.getElementById('randomplayback').checked == true) {
@@ -503,7 +522,12 @@ function getCookies() {
         document.getElementById('playback-duration-limit').checked = isTrueSet;  
     }
     if (getCookieValue("PlaybackTimeLimitValue") != "") {
-        var timeLimitValue = (getCookieValue("PlaybackTimeLimitValue"));
+        var timeLimitValue = parseInt(getCookieValue("PlaybackTimeLimitValue"));
+        if (isNaN(timeLimitValue) | timeLimitValue < 10)
+        {
+            console.log("set timeLimitValue to 10");
+            timeLimitValue = 10;
+        }
         document.getElementById('playback-duration').value = timeLimitValue;  
     }
     listCookies();
