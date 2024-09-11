@@ -266,6 +266,7 @@ function formatDuration(duration) {
 }
 
 // Add event listeners to Play and Stop buttons
+let timerAlertMessage = null;
 document.getElementById('startstop-video').addEventListener('click', function() {
     if (this.innerHTML == "Play") {
         if (this.style.background != "green")
@@ -279,7 +280,8 @@ document.getElementById('startstop-video').addEventListener('click', function() 
                 progressbarinner.addEventListener('animationend', callback);
             }
             progressbarinner.style.animationPlayState = 'running';*/
-            setTimeout(() => {
+            clearInterval(timerAlertMessage);
+            timerAlertMessage = setTimeout(() => {
                 document.getElementById('alertBox').style.display = "none";
             }, 2000); // hide after ms
             return;
