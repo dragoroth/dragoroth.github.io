@@ -388,10 +388,10 @@ function playVideoWithSettingsOptions() {
     }
 
     if (document.getElementById('playback-duration-limit').checked == true) {
-        startTimer();
         clearTimeout(playbackTimer); // Clear any existing timer
         clearInterval(timerInterval);
         timePassed = 0;
+        startTimer();
         // Schedule video stop after the specified duration
         playbackTimer = setTimeout(() => {
             player.pauseVideo();
