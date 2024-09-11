@@ -270,7 +270,7 @@ document.getElementById('startstop-video').addEventListener('click', function() 
     if (this.innerHTML == "Play") {
         if (this.style.background != "green")
         {
-            document.getElementById('alertBox').innerText = "Please do a scan first!";
+            document.getElementById('alertBox').innerText = "Bitte erst scannen!";
             document.getElementById('alertBox').style.display = "block";
             /*var progressbar = document.getElementById('alertHideProgressbar');
             var progressbarinner = document.getElementById('inner');
@@ -388,6 +388,8 @@ function playVideoWithSettingsOptions() {
     if (document.getElementById('playback-duration-limit').checked == true) {
         startTimer();
         clearTimeout(playbackTimer); // Clear any existing timer
+        clearInterval(timerInterval);
+        timePassed = 0;
         // Schedule video stop after the specified duration
         playbackTimer = setTimeout(() => {
             player.pauseVideo();
