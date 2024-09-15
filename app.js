@@ -232,7 +232,7 @@ function onPlayerStateChange(event) {
         document.getElementById('video-duration').textContent = formatDuration(duration);
         // Check for Autoplay
         if (document.getElementById('autoplay').checked == true) {
-            document.getElementById('startstop-video').innerHTML = "Stop";
+            //document.getElementById('startstop-video').innerHTML = "Stop";
             playVideoWithSettingsOptions();
             /*if (document.getElementById('randomplayback').checked == true) {
                 playVideoAtRandomStartTime();
@@ -244,6 +244,7 @@ function onPlayerStateChange(event) {
     }
     else if (event.data == YT.PlayerState.PLAYING) {
         document.getElementById('startstop-video').style.background = "red";
+        document.getElementById('startstop-video').innerHTML = "Stop";
     }
     else if (event.data == YT.PlayerState.PAUSED | event.data == YT.PlayerState.ENDED) {
         document.getElementById('startstop-video').style.background = "green";
@@ -255,6 +256,7 @@ function onPlayerStateChange(event) {
     }
     else if (event.data == YT.PlayerState.BUFFERING) {
         document.getElementById('startstop-video').style.background = "orange";
+        document.getElementById('startstop-video').innerHTML = "Loading";
     }
 }
 
@@ -348,7 +350,7 @@ function calculateTimeFraction() {
   }
   
 
-function playVideoWithSettingsOptions() {
+async function playVideoWithSettingsOptions() {
     const minStartPercentage = 0.10;
     const maxEndPercentage = 0.90;
     let videoDuration = player.getDuration()
@@ -382,6 +384,8 @@ function playVideoWithSettingsOptions() {
 
     player.playVideo();
 
+    await waitForVideoLoaded();
+    
     var pulsingCircles = document.getElementsByClassName('outer-circle');
     for(var i = 0; i < pulsingCircles.length; i++){
         pulsingCircles[i].style.visibility = "visible";
@@ -402,6 +406,24 @@ function playVideoWithSettingsOptions() {
         }, (endTime - startTime) * 1000); // Convert to milliseconds
     }
 }
+
+function waitForVideoLoaded() {
+    return new Promise(resolve => {
+      var start_time = Date.now();
+      function checkFlag() {
+        if (document.getElementById('startstop-video').style.background != "red") {
+          console.log('VideoLoaded');
+          resolve();
+        } else if (Date.now() > start_time + 5000) {
+          console.log('VideoLoadNotFinishedAfterTimeout');
+          resolve();
+        } else {
+          window.setTimeout(checkFlag, 1000); 
+        }
+      }
+      checkFlag();
+    });
+  }
 
 // Assuming you have an element with the ID 'qr-reader' for the QR scanner
 document.getElementById('qr-reader').style.display = 'none'; // Initially hide the QR Scanner
@@ -551,6 +573,8 @@ function getCookies() {
             elem.setAttribute("width", "100");
             document.getElementById('icon').innerText = "";
             document.getElementById('icon').appendChild(elem);
+            document.getElementById('widmung').innerHTML =
+              "Für Steffi & Marcel ❤<br><br>Alles Gute zur Hochzeit wünschen:<br>Carolin & Dennis<br>Celine & Ralf<br>Tokens by Hoof<br><br></br>";
         }
     }
 }
