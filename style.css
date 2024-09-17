@@ -180,6 +180,8 @@ nav {
   }
 
 .outer-circle {
+    width: 100px;
+    height: 100px;
     position: absolute;
     border-radius: 50%;
     border: 2px solid #87ceeb;
@@ -188,6 +190,12 @@ nav {
     visibility: hidden;
 }
 
+.outer-circle:nth-child(1) {
+    width: 100px;
+    height: 100px;
+    animation-delay: 0s;
+    opacity: 0;
+}
 .outer-circle:nth-child(2) {
     width: 100px;
     height: 100px;
