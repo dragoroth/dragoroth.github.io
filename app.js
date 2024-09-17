@@ -383,9 +383,11 @@ async function playVideoWithSettingsOptions() {
     }
 
     player.playVideo();
-
-    await waitForVideoLoaded();
     
+    //document.getElementById('menu-home-button').innerHTML = "waitingForLoad";
+    await waitForVideoLoaded();
+    //document.getElementById('menu-home-button').innerHTML = "loadingDone";
+
     var pulsingCircles = document.getElementsByClassName('outer-circle');
     for(var i = 0; i < pulsingCircles.length; i++){
         pulsingCircles[i].style.visibility = "visible";
@@ -411,7 +413,7 @@ function waitForVideoLoaded() {
     return new Promise(resolve => {
       var start_time = Date.now();
       function checkFlag() {
-        if (document.getElementById('startstop-video').style.background != "red") {
+        if (document.getElementById('startstop-video').style.background == "red") {
           console.log('VideoLoaded');
           resolve();
         } else if (Date.now() > start_time + 5000) {
