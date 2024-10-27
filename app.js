@@ -6,6 +6,7 @@ let playbackDuration = 30; // Default playback duration
 let qrScanner;
 let csvCache = {};
 
+
 document.addEventListener('DOMContentLoaded', function () {
 
     let lastDecodedText = ""; // Store the last decoded text
@@ -431,6 +432,11 @@ function waitForVideoLoaded() {
 document.getElementById('qr-reader').style.display = 'none'; // Initially hide the QR Scanner
 
 document.getElementById('startScanButton').addEventListener('click', function() {
+    if (appOnlyMode)
+    {
+        getRandomPlaylistSong();
+        return;
+    }
     document.getElementById('cancelScanButton').style.display = 'block';
     document.getElementById('qr-reader').style.display = 'block'; // Show the scanner
     qrScanner.start().catch(err => {
@@ -443,7 +449,159 @@ document.getElementById('startScanButton').addEventListener('click', function() 
     });
 });
 
+async function getRandomPlaylistSong() {
+    let youtubeURL = "";
+    try
+    {
+        var selectedList = document.getElementById("songlist-picker").value;
+        const csvContent = await getCachedCsvRandom(`/${selectedList}`);
+        const youtubeLink = lookupYoutubeLinkRandom(csvContent);
+        if (youtubeLink) {
+            // Handle YouTube link obtained from the CSV
+            console.log(`YouTube Link from CSV: ${youtubeLink}`);
+            youtubeURL = youtubeLink;
+            // Example: player.cueVideoById(parseYoutubeLink(youtubeLink).videoId);
+        }
+    } catch (error) {
+        console.error("Failed to fetch CSV:", error);
+    }
+
+    console.log(`YouTube Video URL: ${youtubeURL}`);
+
+    const youtubeLinkData = parseYoutubeLink(youtubeURL);
+    if (youtubeLinkData) {
+        //qrScanner.stop(); // Stop scanning after a result is found
+        //document.getElementById('qr-reader').style.display = 'none'; // Hide the scanner after successful scan
+        //document.getElementById('cancelScanButton').style.display = 'none'; // Hide the cancel-button
+        //lastDecodedText = ""; // Reset the last decoded text
+
+        document.getElementById('video-id').textContent = youtubeLinkData.videoId;  
+
+        console.log("Queing video:", youtubeLinkData.videoId, ", Starting at ", youtubeLinkData.startTime);
+        player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
+    }
+}
+
+async function getCachedCsvRandom(url) {
+    if (!csvCache[url]) { // Check if the URL is not in the cache
+        console.log(`URL not cached, fetching CSV from URL: ${url}`);
+        const response = await fetch(url);
+        const data = await response.text();
+        csvCache[url] = parseCSVRandom(data); // Cache the parsed CSV data using the URL as a key
+    }
+    return csvCache[url]; // Return the cached data for the URL
+}
+
+function parseCSVRandom(text) {
+    const lines = text.split('\n');
+    return lines.map(line => {
+        const result = [];
+        let startValueIdx = 0;
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            if (line[i] === '"' && line[i-1] !== '\\') {
+                inQuotes = !inQuotes;
+            } else if (line[i] === ',' && !inQuotes) {
+                result.push(line.substring(startValueIdx, i).trim().replace(/^"(.*)"$/, '$1'));
+                startValueIdx = i + 1;
+            }
+        }
+        result.push(line.substring(startValueIdx).trim().replace(/^"(.*)"$/, '$1')); // Push the last value
+        return result;
+    });
+}
+
+function lookupYoutubeLinkRandom(csvContent) {
+    const headers = csvContent[0]; // Get the headers from the CSV content
+    const cardIndex = headers.indexOf('Card#');
+    const urlIndex = headers.indexOf('URL');
+
+    const lines = csvContent.slice(1); // Exclude the first row (headers) from the lines
+    const targetId = getRandomInt(lines.length - 1); // Convert the incoming ID to an integer
+
+    if (cardIndex === -1 || urlIndex === -1) {
+        throw new Error('Card# or URL column not found');
+    }
+    let row = lines[targetId];
+    lastRandomRow = row;
+    //console.log(`Row= ${row}`);
+    let rowURL = row[urlIndex].trim();
+    //console.log(`RowURL= ${rowURL}`);
+    //let row = lines[targetId][urlIndex].strip();
+    return rowURL;
+    for (let row of lines) {
+        const csvId = parseInt(row[cardIndex], 10);
+        if (csvId === targetId) {
+            return row[urlIndex].trim(); // Return the YouTube link
+        }
+    }
+    return null; // If no matching ID is found
+}
+
+function parseYoutubeLink(url) {
+    // First, ensure that the URL is decoded (handles encoded URLs)
+    url = decodeURIComponent(url);
+
+    const regex = /^https?:\/\/(www\.youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)(.{11}).*/;
+    const match = url.match(regex);
+    if (match) {
+        const queryParams = new URLSearchParams(match[4]); // Correctly capture and parse the query string part of the URL
+        const videoId = match[2];
+        console.log(queryParams);
+        let startTime = queryParams.get('start') || queryParams.get('t');
+        const endTime = queryParams.get('end');
+
+        // Normalize and parse 't' and 'start' parameters
+        startTime = normalizeTimeParameter(startTime);
+        const parsedEndTime = normalizeTimeParameter(endTime);
+        if (startTime == null) startTime = 0;
+
+        return { videoId, startTime, endTime: parsedEndTime };
+    }
+    else console.log(`No match: ${url}`)
+    return null;
+}
+
+function normalizeTimeParameter(timeValue) {
+    if (!timeValue) return null; // Return null if timeValue is falsy
+
+    // Handle time formats (e.g., 't=1m15s' or '75s')
+    let seconds = 0;
+    if (timeValue.endsWith('s')) {
+        seconds = parseInt(timeValue, 10);
+    } else {
+        // Additional parsing can be added here for 'm', 'h' formats if needed
+        seconds = parseInt(timeValue, 10);
+    }
+
+    return isNaN(seconds) ? null : seconds;
+}
+
+function getRandomInt(max) {
+    return Math.floor(Math.random() * max);
+}
+
+document.getElementById('solveButton').addEventListener('click', function() {
+    //Card#,Artist,Title,URL,Hashed Info,Youtube-Title,Year
+    if (lastRandomRow != null)
+    {
+        document.getElementById("solveButton-overlay-text").innerHTML = lastRandomRow[1] + "<br>" + lastRandomRow[2] + "<br>" + lastRandomRow[6];
+        //document.getElementById("solveButton-overlay-songname").innerHTML = lastRandomRow[2];
+        //document.getElementById("solveButton-overlay-songyear").innerHTML = lastRandomRow[6];
+        document.getElementById("solveButton-overlay").style.display = "block";
+    }
+});
+
+document.getElementById('solveButton-overlay').addEventListener('click', function() {
+    document.getElementById("solveButton-overlay").style.display = "none";
+});
+
 document.getElementById('songinfo').addEventListener('click', function() {
+    updateSongInfo();
+});
+
+function updateSongInfo()
+{
     var cb = document.getElementById('songinfo');
     var videoid = document.getElementById('videoid');
     var videotitle = document.getElementById('videotitle');
@@ -457,7 +615,7 @@ document.getElementById('songinfo').addEventListener('click', function() {
         videotitle.style.display = 'none';
         videoduration.style.display = 'none';
     }
-});
+}
 
 document.getElementById('cancelScanButton').addEventListener('click', function() {
     qrScanner.stop(); // Stop scanning after a result is found
@@ -489,6 +647,24 @@ document.getElementById('credits').addEventListener('click', function() {
     {
         document.getElementById('credits_div').style.display = 'none';
         creditsvisible = false;
+    }
+});
+
+let appOnlyMode = false;
+let lastRandomRow = null;
+document.getElementById('appOnlyMode').addEventListener('click', function() {
+    document.cookie = "appOnlyMode=" + this.checked + ";max-age=2592000"; //30 Tage
+    appOnlyMode = this.checked;
+    listCookies();
+    if (appOnlyMode)
+    {
+        document.getElementById("startScanButton").innerHTML = "Next";
+        document.getElementById("solveButton").style.display = 'block';
+    }
+    else 
+    {
+        document.getElementById("startScanButton").innerHTML = "Scan";
+        document.getElementById("solveButton").style.display = 'none';
     }
 });
 
@@ -525,7 +701,7 @@ document.getElementById('cookies').addEventListener('click', function() {
 function listCookies() {
     var result = document.cookie;
     document.getElementById("cookielist").innerHTML=result;
- }
+}
 
 function getCookieValue(name) {
     const regex = new RegExp(`(^| )${name}=([^;]+)`);
@@ -533,6 +709,24 @@ function getCookieValue(name) {
     if (match) {
         return match[2];
     }
+}
+
+function getSonglists() {
+    var selectList = document.getElementById("songlist-picker");
+    const directoryPath = 'tmp/playlists';
+    fs.readdir(directoryPath, (err, files) => {
+        if (err) {
+            return res.status(500).send('Unable to scan directory');
+        }
+        const csvFiles = files.filter(file => file.endsWith('.csv'));
+        result = json(csvFiles);
+        result.forEach(file => {
+            const option = document.createElement('option');
+            option.value = file;
+            option.textContent = file;
+            selectList.appendChild(option);
+        });
+    });
 }
 
 function getCookies() {
@@ -557,6 +751,17 @@ function getCookies() {
             timeLimitValue = 10;
         }
         document.getElementById('playback-duration').value = timeLimitValue;  
+    }
+    if (getCookieValue("appOnlyMode") != "") {
+        isTrueSet = (getCookieValue("appOnlyMode") === 'true');
+        document.getElementById('appOnlyMode').checked = isTrueSet;
+        appOnlyMode = true;
+        document.getElementById("startScanButton").innerHTML = "Next";
+        document.getElementById("solveButton").style.display = 'block';
+    }
+    else
+    {
+        document.getElementById("solveButton").style.display = 'none';
     }
     listCookies();
 
