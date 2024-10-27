@@ -755,14 +755,18 @@ function getCookies() {
     if (getCookieValue("appOnlyMode") != "") {
         isTrueSet = (getCookieValue("appOnlyMode") === 'true');
         document.getElementById('appOnlyMode').checked = isTrueSet;
-        appOnlyMode = true;
-        document.getElementById("startScanButton").innerHTML = "Next";
-        document.getElementById("solveButton").style.display = 'block';
+        if (isTrueSet)
+        {
+            appOnlyMode = true;
+            document.getElementById("startScanButton").innerHTML = "Next";
+            document.getElementById("solveButton").style.display = 'block';
+        }
+        else
+        {
+            document.getElementById("solveButton").style.display = 'none';
+        }
     }
-    else
-    {
-        document.getElementById("solveButton").style.display = 'none';
-    }
+    
     listCookies();
 
     var sPageURL = window.location.search.substring(1);
