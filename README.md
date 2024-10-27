@@ -1,5 +1,7 @@
 # songseeker
 A Music Guessing game called SongSeeker, available as Website.
+Original idea and code by Andy Gruber:
+https://github.com/andygruber/songseeker/
 
 Just provide the contents on some https page and you should be good to go (camera access via http is often not allowed).
 
