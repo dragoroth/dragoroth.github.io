@@ -236,15 +236,17 @@ function renderVisualizer() {
     ctx.globalCompositeOperation = 'source-over';
 }
 
-// Helper & Events Setup
+// Event Listeners
 function setupEventListeners() {
     let timerAlertMessage = null;
 
     document.getElementById('startstop-video').addEventListener('click', function() {
         if (!isPlaying) {
-            if (!player || typeof player.getPlayerState !== 'function' || player.getPlayerState() === -1) {
+            const playerState = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
+            
+            if (playerState === -1) {
                 const alertBox = document.getElementById('alertBox');
-                alertBox.innerText = "Bitte erst scannen!";
+                alertBox.innerText = appOnlyMode ? "Bitte erst 'Next' klicken!" : "Bitte erst scannen!";
                 alertBox.style.display = "block";
                 clearTimeout(timerAlertMessage);
                 timerAlertMessage = setTimeout(() => { alertBox.style.display = "none"; }, 2000);
@@ -285,14 +287,22 @@ function setupEventListeners() {
         this.style.display = "none";
     });
 
-    // Menü-Toggles
+    // Menü Toggle & Klick außerhalb
     document.getElementById('cb_settings').addEventListener('click', () => toggleDisplay('settings_div'));
     document.getElementById('credits').addEventListener('click', () => toggleDisplay('credits_div'));
     document.getElementById('menu-home-button').addEventListener('click', () => {
         document.getElementById('menu-toggle').checked = false;
     });
 
-    // Einstellungen Persistence
+    document.addEventListener('click', function(event) {
+        const menuNav = document.querySelector('nav');
+        const menuToggle = document.getElementById('menu-toggle');
+        if (menuToggle.checked && !menuNav.contains(event.target)) {
+            menuToggle.checked = false;
+        }
+    });
+
+    // Einstellungen
     document.getElementById('songinfo').addEventListener('click', updateSongInfo);
     document.getElementById('appOnlyMode').addEventListener('click', function() {
         setCookie("appOnlyMode", this.checked, 30);
@@ -381,7 +391,7 @@ function parseYoutubeLink(url) {
     return null;
 }
 
-// Cookies
+// Cookies Persistence
 function setCookie(name, value, days) {
     document.cookie = `${name}=${value};max-age=${days * 86400}`;
 }
