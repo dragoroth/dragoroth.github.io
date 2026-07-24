@@ -64,6 +64,10 @@ nav {
     right: 0;
 }
 
+body:has(#menu-toggle:checked) {
+    overflow: hidden;
+}
+
 .menu-main-class {
     background-color: var(--primary-color);
     margin: 6px 0;
