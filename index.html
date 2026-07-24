@@ -1,177 +1,139 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
-    <title>SongSeeker</title>
-    <script type="module">
-        import QrScanner from "https://unpkg.com/qr-scanner/qr-scanner.min.js";
-    </script>
-    <link rel="stylesheet" href="style.css">
-    <meta name=viewport content="width=device-width, initial-scale=1.0">
     <meta charset="UTF-8">
-    <!-- Allow web app to be run in full-screen mode -->
+    <title>SongSeeker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <!-- iOS icons -->
-    <link rel="apple-touch-icon" sizes="180x180" href="icon-180x180.png">
-    <!-- Android icons -->
-    <link rel="icon" type="image/png" sizes="192x192" href="icon-192x192.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="icon-96x96.png">
-
+    <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/x-icon" href="musicNoteIcon.ico">
-
-    <link rel="shortcut icon" sizes="192x192" href="icon-192x192.png">
-
     <link rel="manifest" href="manifest.json">
-
 </head>
 <body>
     <header>
         <div class="icon">🎵</div>
-        <!--<img src="musicNoteIcon.png" class="icon" width="100" height="100">-->
         <nav>
             <input type="checkbox" id="menu-toggle">
             <label for="menu-toggle" class="menu-icon">☰</label>
             <ul class="menu" id="menu">
-                <span style="height: 25px;margin-left: 10px; margin-top: 20px;"></span>
-                <div class="menu-main-item">
-                    <li id="menu-home-button" class = "menu-main-class"><a href="#"><span>🏠</span> Home</a></li>
-                </div>
-                <div class="menu-main-item">
-                    <li id="cb_settings" class = "menu-main-class"><a href="#"><span>⚙️</span> Einstellungen</a></li>
-                    <div id="settings_div" class="settings_div">
-                        <li class="menusubitem">
-                            <label class="switch">
-                                <input type="checkbox" id="autoplay" name="autoplay">>
-                                <span class="slider round" id="autoplay-slider"></span>
-                            </label>
-                            <label for="autoplay" style="margin-left: 5px;">Autoplay</label>
-                        </li>
-                        <li class="menusubitem">
-                            <label class="switch">
-                                <input type="checkbox" id="randomplayback" name="randomplayback">>
-                                <span class="slider round" id="randomplayback-slider"></span>
-                            </label>
-                            <label for="randomplayback" style="margin-left: 5px;">Zufällige Wiedergabe</label>
-                        </li>
-                        <li class="menusubitem">
-                            <label class="switch">
-                                <input type="checkbox" id="playback-duration-limit" name="playback-duration-limit">>
-                                <span class="slider round" id="playback-duration-limit-slider"></span>
-                            </label>
-                            <label for="playback-duration-limit" style="margin-left: 5px;">Zeitlimit (s):</label>
-                            <!--<br/>
-                            <label for="playback-duration" style="margin-left: 25px;">auf (s): </label>-->
-                            <input type="number" min="5" id="playback-duration" value="30" style="margin-left: 5px; text-align: right;">
-                        </li>
-                        <li class="menusubitem">
-                            <label class="switch">
-                                <input type="checkbox" id="songinfo" name="songinfo">>
-                                <span class="slider round" id="songinfoslider"></span>
-                            </label>
-                            <label for="songinfo" style="margin-left: 5px;">Song-Infos anzeigen</label>
-                        </li>
-                        <li class="menusubitem">
-                            <label class="switch">
-                                <input type="checkbox" id="cookies" name="cookies">>
-                                <span class="slider round" id="cookielistslider"></span>
-                            </label>
-                            <label for="cookies" style="margin-left: 5px;">Cookies anzeigen</label>
-                        </li>
-                        <span id="cookielist"></span>
-                        <li class="menusubitem">
-                            <label class="switch">
-                                <input type="checkbox" id="appOnlyMode" name="appOnlyMode">>
-                                <span class="slider round" id="appOnlyModeslider"></span>
-                            </label>
-                            <label for="appOnlyMode" style="margin-left: 5px;">Zufall statt Scan</label>
-                        </li>
-                        <li class="menusubitem" style="margin-top: -10px; padding-left: 10px;">
-                            <label for="songlist-picker">Song-Liste:</label>
-                            <select name="songlist-picker" id="songlist-picker">
-                                <option>hitster-de.csv</option>
-                                <option>hitster-nordics.csv</option>
-                                <option>hitster-de-aaaa0007.csv</option>
-                                <option>hitster-de-aaaa0012.csv</option>
-                                <option>hitster-de-aaaa0015.csv</option>
-                            </select>
-                        </li>
+                <li id="menu-home-button" class="menu-main-class"><a href="#"><span>🏠</span> Home</a></li>
+                
+                <li id="cb_settings" class="menu-main-class"><a href="#"><span>⚙️</span> Einstellungen</a></li>
+                <div id="settings_div" class="settings_div">
+                    <div class="menusubitem">
+                        <label class="switch">
+                            <input type="checkbox" id="autoplay" name="autoplay">
+                            <span class="slider round"></span>
+                        </label>
+                        <label for="autoplay">Autoplay</label>
+                    </div>
+                    <div class="menusubitem">
+                        <label class="switch">
+                            <input type="checkbox" id="randomplayback" name="randomplayback">
+                            <span class="slider round"></span>
+                        </label>
+                        <label for="randomplayback">Zufällige Wiedergabe</label>
+                    </div>
+                    <div class="menusubitem">
+                        <label class="switch">
+                            <input type="checkbox" id="playback-duration-limit" name="playback-duration-limit">
+                            <span class="slider round"></span>
+                        </label>
+                        <label for="playback-duration-limit">Zeitlimit (s):</label>
+                        <input type="number" min="5" id="playback-duration" value="30">
+                    </div>
+                    <div class="menusubitem">
+                        <label class="switch">
+                            <input type="checkbox" id="songinfo" name="songinfo">
+                            <span class="slider round"></span>
+                        </label>
+                        <label for="songinfo">Song-Infos anzeigen</label>
+                    </div>
+                    <div class="menusubitem">
+                        <label class="switch">
+                            <input type="checkbox" id="cookies" name="cookies">
+                            <span class="slider round"></span>
+                        </label>
+                        <label for="cookies">Cookies anzeigen</label>
+                    </div>
+                    <div id="cookielist" class="cookielist"></div>
+                    <div class="menusubitem">
+                        <label class="switch">
+                            <input type="checkbox" id="appOnlyMode" name="appOnlyMode">
+                            <span class="slider round"></span>
+                        </label>
+                        <label for="appOnlyMode">Zufall statt Scan</label>
+                    </div>
+                    <div class="menusubitem songlist-select">
+                        <label for="songlist-picker">Song-Liste:</label>
+                        <select name="songlist-picker" id="songlist-picker">
+                            <option>hitster-de.csv</option>
+                            <option>hitster-nordics.csv</option>
+                            <option>hitster-de-aaaa0007.csv</option>
+                            <option>hitster-de-aaaa0012.csv</option>
+                            <option>hitster-de-aaaa0015.csv</option>
+                        </select>
                     </div>
                 </div>
-                <div class="menu-main-item">
-                    <li id="credits" class = "menu-main-class"><a href="#"><span>⭐</span> Credits</a></li>
-                    <div id="credits_div" class="credits_div" style="margin-left: 20px;">
-                        <li>
-                            <span id="creditlist" style="margin-left: 30px;">
-                                <div id="widmung" style="text-align: center;"></div>
-                                Original code by andygruber:<br>
-                                <a style="margin-left: 10px; text-decoration: underline; text-align: center;" href="https://github.com/andygruber/songseeker/">Songseeker - Github</a>
-                                
-                            </span>
-                        </li>
-                    </div>
+
+                <li id="credits" class="menu-main-class"><a href="#"><span>⭐</span> Credits</a></li>
+                <div id="credits_div" class="credits_div">
+                    <span id="creditlist">
+                        <div id="widmung"></div>
+                        Original code by andygruber:<br>
+                        <a href="https://github.com/andygruber/songseeker/" target="_blank">Songseeker - Github</a>
+                    </span>
                 </div>
-                <div class="menu-main-item">
-                    <li id="privacy" class="menu-main-class"><a href="privacy_statement.html">Privacy Statement</a></li>
-                </div>
+
+                <li id="privacy" class="menu-main-class"><a href="privacy_statement.html">Privacy Statement</a></li>
             </ul>
         </nav>
     </header>
+
     <main>
-        <div id="qr-reader">
-            <button id="cancelScanButton" class="scan-button">Cancel Scan</button>
+        <div id="qr-reader" style="display: none;">
+            <button id="cancelScanButton" class="scan-button cancelScanButton">Cancel Scan</button>
             <video id="qr-video"></video>
         </div>
+
         <div class="alert" id="alertBox" onclick="this.style.display='none';" style="display: none;">
-            This is an alert box.
+            Alert Box
         </div>
-        <!--<div id="alertHideProgressbar" style="background-color: brown;"><div id="inner"></div></div>-->
+
         <section class="audiogram">
-            <div class="pulsating-circle">
-                <div class="inner-circle" id="icon">🎵</div>
-                <div class="base-timer">
-                    <svg class="base-timer__svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                      <g class="base-timer__circle">
-                        <circle class="base-timer__path-elapsed" cx="50" cy="50" r="45"></circle>
-                        <path
-                          id="base-timer-path-remaining"
-                          stroke-dasharray="283"
-                          class="base-timer__path-remaining"
-                          d="
-                            M 50, 50
-                            m -45, 0
-                            a 45,45 0 1,0 90,0
-                            a 45,45 0 1,0 -90,0
-                          "
-                        ></path>
-                      </g>
+            <div class="player-container">
+                <canvas id="visualizer" width="360" height="360"></canvas>
+                
+                <!-- Play Button direkt im Zentrum der Animation -->
+                <button class="btn-play-pause" id="startstop-video" aria-label="Play/Stop">
+                    <svg class="icon-svg icon-play" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
                     </svg>
-                </div>
-                <div class="outer-circle"></div>
-                <div class="outer-circle"></div>
-                <div class="outer-circle"></div>
-                <div class="outer-circle"></div>
-                <div class="outer-circle"></div>
+                    <svg class="icon-svg icon-stop" viewBox="0 0 24 24">
+                        <path d="M6 6h12v12H6z"/>
+                    </svg>
+                </button>
             </div>
         </section>
+
         <div class="mainButtons">
-            <button id="startScanButton"  class="scan-button">Scan</button>
-            <button id="startstop-video"  class="scan-button">Play</button>
-            <button id="solveButton"  class="scan-button">Solve</button>
-            <div id="solveButton-overlay" onclick="solveButtonOverlayOff()">
-                <div class="solveButton-overlay-backbox"></div>
+            <button id="startScanButton" class="scan-button">Scan</button>
+            <button id="solveButton" class="scan-button" style="display: none;">Solve</button>
+            
+            <div id="solveButton-overlay">
                 <span id="solveButton-overlay-text" class="solveButton-overlay-text"></span>
             </div>
         </div>
+
         <div class="videoInfo">
             <div id="videoid">Video ID: <span id="video-id"></span></div>
             <div id="videotitle">Video Title: <span id="video-title"></span></div>
             <div id="videoduration">Video Duration: <span id="video-duration"></span></div>
         </div>
     </main>
-    <footer>
-        
-    </footer>
+
     <div id="player"></div> <!-- Load YouTube Player -->
 
     <script type="module" src="app.js"></script>
