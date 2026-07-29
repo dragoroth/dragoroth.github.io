@@ -180,6 +180,18 @@ canvas#visualizer {
     transform: scale(0.95);
 }
 
+/* Ladeanzeige-Animation für neuen Song */
+.btn-play-pause.is-loading {
+    animation: pulse-loader 1.2s infinite ease-in-out;
+    border-color: #ff9800 !important;
+}
+
+@keyframes pulse-loader {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.7); }
+    50% { transform: scale(1.08); box-shadow: 0 0 0 15px rgba(255, 152, 0, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
+}
+
 .icon-svg {
     fill: #277594;
     width: 28px;
