@@ -26,7 +26,6 @@ document.addEventListener('DOMContentLoaded', function () {
     canvas = document.getElementById('visualizer');
     ctx = canvas.getContext('2d');
 
-    // Prüfe URL-Parameter auf mode=OHYES
     checkUrlParameters();
 
     // QR-Scanner
@@ -91,12 +90,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function lookupYoutubeLink(id, csvContent) {
-        const headers = csvContent[0].map(h => h.trim());
+        const headers = csvContent[0];
         lastCsvHeaders = headers;
         
-        // Dynamische Zuordnung der Spalten
-        const cardIndex = findColumnIndex(headers, ['card#', 'card', 'id', 'nr']);
-        const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube']);
+        const cardIndex = findColumnIndex(headers, ['card#', 'card', 'id', 'nr', 'card_number', 'cardnumber']);
+        const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube', 'video']);
         const targetId = parseInt(id, 10);
         const lines = csvContent.slice(1);
 
@@ -114,7 +112,6 @@ document.addEventListener('DOMContentLoaded', function () {
     getCookies();
 });
 
-// Mode=OHYES Erkennung in URL
 function checkUrlParameters() {
     const urlParams = new URLSearchParams(window.location.search);
     for (const [key, value] of urlParams.entries()) {
@@ -142,7 +139,6 @@ function enableAppOnlyMode(enable) {
     setCookie("appOnlyMode", enable, 30);
 }
 
-// Visueller Lade-Status (Button Animation)
 function setLoadingState(loading) {
     const playBtn = document.getElementById('startstop-video');
     if (loading) {
@@ -174,7 +170,6 @@ function onPlayerStateChange(event) {
     
     if (event.data == YT.PlayerState.BUFFERING) {
         setLoadingState(true);
-        // Autoplay-Verhalten bei neuen/gecueden Titeln ausführen
         if (document.getElementById('autoplay').checked && !isPlaying) {
             playVideoWithSettingsOptions();
         }
@@ -193,6 +188,7 @@ function onPlayerStateChange(event) {
         setLoadingState(false);
         playBtn.classList.add('is-playing');
         isPlaying = true;
+        if (playStartTime === 0) playStartTime = Date.now();
         renderVisualizer();
     }
     else if (event.data == YT.PlayerState.PAUSED || event.data == YT.PlayerState.ENDED) {
@@ -246,6 +242,8 @@ async function playVideoWithSettingsOptions() {
         playbackTimer = setTimeout(() => {
             player.pauseVideo();
         }, targetPlayDuration * 1000);
+    } else {
+        targetPlayDuration = 0;
     }
 }
 
@@ -276,7 +274,7 @@ function drawGlowingSineRing({ cx, cy, baseRadius, frequency, amplitude, phaseSh
     ctx.shadowBlur = 0;
 }
 
-// Timer-Ring Rendering
+// Timer-Ring Rendering (Sichtbarer Radius: 65px)
 function drawTimerRing(cx, cy, radius) {
     const isTimerActive = document.getElementById('playback-duration-limit').checked;
     if (!isTimerActive || targetPlayDuration <= 0) return;
@@ -287,22 +285,28 @@ function drawTimerRing(cx, cy, radius) {
     const startAngle = -Math.PI / 2;
     const endAngle = startAngle + (Math.PI * 2 * (1 - progress));
 
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+
     // Hintergrund-Ring
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 6;
     ctx.stroke();
 
-    // Aktiver Countdown-Ring (schließt / baut ab im Uhrzeigersinn)
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, startAngle, endAngle, false);
-    ctx.strokeStyle = '#ff5400';
-    ctx.shadowColor = '#ff5400';
-    ctx.shadowBlur = 10;
-    ctx.lineWidth = 6;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+    // Aktiver Countdown-Ring
+    if (progress < 1) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, startAngle, endAngle, false);
+        ctx.strokeStyle = '#FF5400';
+        ctx.shadowColor = '#FF5400';
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 8;
+        ctx.stroke();
+    }
+    
+    ctx.restore();
 }
 
 function renderVisualizer() {
@@ -318,25 +322,29 @@ function renderVisualizer() {
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    // Timer Ring unter der Welle rendern
-    drawTimerRing(cx, cy, 46);
-
     ctx.globalCompositeOperation = 'screen';
 
     const glowCyan = 'rgba(0, 212, 255, 0.8)';
     const glowIce = 'rgba(176, 242, 255, 0.6)';
 
-    drawGlowingSineRing({ cx, cy, baseRadius: 55, frequency: 8, amplitude: 4, phaseShift: phase, color: 'rgba(0, 150, 220, 0.7)', glowColor: glowCyan, glowBlur: 15, lineWidth: 3 });
-    drawGlowingSineRing({ cx, cy, baseRadius: 75, frequency: 12, amplitude: 5, phaseShift: -phase * 1.1, color: 'rgba(0, 200, 255, 0.6)', glowColor: glowCyan, glowBlur: 12, lineWidth: 2.5 });
-    drawGlowingSineRing({ cx, cy, baseRadius: 95, frequency: 16, amplitude: 6, phaseShift: phase * 1.4, color: 'rgba(100, 230, 255, 0.5)', glowColor: glowIce, glowBlur: 10, lineWidth: 2 });
+    drawGlowingSineRing({ cx, cy, baseRadius: 80, frequency: 8, amplitude: 4, phaseShift: phase, color: 'rgba(0, 150, 220, 0.7)', glowColor: glowCyan, glowBlur: 15, lineWidth: 3 });
+    drawGlowingSineRing({ cx, cy, baseRadius: 95, frequency: 12, amplitude: 5, phaseShift: -phase * 1.1, color: 'rgba(0, 200, 255, 0.6)', glowColor: glowCyan, glowBlur: 12, lineWidth: 2.5 });
+    drawGlowingSineRing({ cx, cy, baseRadius: 110, frequency: 16, amplitude: 6, phaseShift: phase * 1.4, color: 'rgba(100, 230, 255, 0.5)', glowColor: glowIce, glowBlur: 10, lineWidth: 2 });
 
-    ctx.globalCompositeOperation = 'source-over';
+    // Timer-Ring oberhalb der Visualizer-Wellen zeichnen
+    drawTimerRing(cx, cy, 65);
 }
 
-// Dynamic CSV Column Finder
+// Hilfsfunktion zur Bereinigung von Header-Namen (entfernt BOM & Sondenzeichen)
+function cleanHeaderString(str) {
+    if (!str) return '';
+    return str.replace(/^\ufeff/, '').trim().toLowerCase();
+}
+
+// Dynamischer Spaltenfinder
 function findColumnIndex(headers, possibleNames) {
-    if (!headers) return -1;
-    const cleanHeaders = headers.map(h => h.trim().toLowerCase());
+    if (!headers || headers.length === 0) return -1;
+    const cleanHeaders = headers.map(cleanHeaderString);
     for (const name of possibleNames) {
         const idx = cleanHeaders.indexOf(name.toLowerCase());
         if (idx !== -1) return idx;
@@ -386,14 +394,13 @@ function setupEventListeners() {
 
     document.getElementById('solveButton').addEventListener('click', function() {
         if (lastRandomRow && lastCsvHeaders) {
-            // Dynamisches Auslesen anhand von Spaltennamen
-            const artistIdx = findColumnIndex(lastCsvHeaders, ['artist', 'interpret', 'künstler']);
-            const titleIdx = findColumnIndex(lastCsvHeaders, ['title', 'titel', 'song']);
-            const yearIdx = findColumnIndex(lastCsvHeaders, ['year', 'jahr', 'release']);
+            const artistIdx = findColumnIndex(lastCsvHeaders, ['artist', 'interpret', 'künstler', 'performer', 'author']);
+            const titleIdx = findColumnIndex(lastCsvHeaders, ['title', 'titel', 'song', 'track', 'name']);
+            const yearIdx = findColumnIndex(lastCsvHeaders, ['year', 'jahr', 'release', 'date', 'erscheinungsjahr']);
 
-            const artist = artistIdx !== -1 ? lastRandomRow[artistIdx] : (lastRandomRow[1] || '');
-            const title = titleIdx !== -1 ? lastRandomRow[titleIdx] : (lastRandomRow[2] || '');
-            const year = yearIdx !== -1 ? lastRandomRow[yearIdx] : (lastRandomRow[6] || lastRandomRow[3] || '');
+            const artist = (artistIdx !== -1 && lastRandomRow[artistIdx]) ? lastRandomRow[artistIdx] : (lastRandomRow[1] || '');
+            const title = (titleIdx !== -1 && lastRandomRow[titleIdx]) ? lastRandomRow[titleIdx] : (lastRandomRow[2] || '');
+            const year = (yearIdx !== -1 && lastRandomRow[yearIdx]) ? lastRandomRow[yearIdx] : (lastRandomRow[6] || lastRandomRow[3] || '');
 
             document.getElementById("solveButton-overlay-text").innerHTML = `${artist}<br>${title}<br>${year}`;
             document.getElementById("solveButton-overlay").style.display = "block";
@@ -404,7 +411,6 @@ function setupEventListeners() {
         this.style.display = "none";
     });
 
-    // Menü Toggle & Klick außerhalb
     document.getElementById('cb_settings').addEventListener('click', () => toggleDisplay('settings_div'));
     document.getElementById('credits').addEventListener('click', () => toggleDisplay('credits_div'));
     document.getElementById('menu-home-button').addEventListener('click', () => {
@@ -419,7 +425,6 @@ function setupEventListeners() {
         }
     });
 
-    // Einstellungen
     document.getElementById('songinfo').addEventListener('click', updateSongInfo);
     document.getElementById('appOnlyMode').addEventListener('click', function() {
         enableAppOnlyMode(this.checked);
@@ -458,9 +463,9 @@ async function getRandomPlaylistSong() {
 }
 
 function lookupYoutubeLinkRandom(csvContent) {
-    const headers = csvContent[0].map(h => h.trim());
+    const headers = csvContent[0];
     lastCsvHeaders = headers;
-    const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube']);
+    const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube', 'video']);
     const lines = csvContent.slice(1);
     if (urlIndex === -1 || lines.length === 0) return null;
 
@@ -479,7 +484,9 @@ async function getCachedCsv(url) {
 }
 
 function parseCSV(text) {
-    return text.split('\n').filter(line => line.trim() !== '').map(line => {
+    // BOM am Anfang entfernen
+    const cleanText = text.replace(/^\ufeff/, '');
+    return cleanText.split(/\r?\n/).filter(line => line.trim() !== '').map(line => {
         const result = [];
         let startValueIdx = 0, inQuotes = false;
         for (let i = 0; i < line.length; i++) {
@@ -524,4 +531,3 @@ function getCookies() {
         enableAppOnlyMode(active);
     }
 }
-    
