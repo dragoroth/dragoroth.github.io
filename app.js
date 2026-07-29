@@ -6,7 +6,12 @@ let playbackDuration = 30;
 let qrScanner;
 let csvCache = {};
 let lastRandomRow = null;
+let lastCsvHeaders = [];
 let appOnlyMode = false;
+
+// Timer-Ring Variablen
+let playStartTime = 0;
+let targetPlayDuration = 0;
 
 // Visualizer Globale Variablen
 let canvas, ctx;
@@ -20,6 +25,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const video = document.getElementById('qr-video');
     canvas = document.getElementById('visualizer');
     ctx = canvas.getContext('2d');
+
+    // Prüfe URL-Parameter auf mode=OHYES
+    checkUrlParameters();
 
     // QR-Scanner
     qrScanner = new QrScanner(video, result => {
@@ -57,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function () {
             lastDecodedText = ""; 
 
             document.getElementById('video-id').textContent = youtubeLinkData.videoId;  
+            setLoadingState(true);
             player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
         }
     }
@@ -82,9 +91,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function lookupYoutubeLink(id, csvContent) {
-        const headers = csvContent[0];
-        const cardIndex = headers.indexOf('Card#');
-        const urlIndex = headers.indexOf('URL');
+        const headers = csvContent[0].map(h => h.trim());
+        lastCsvHeaders = headers;
+        
+        // Dynamische Zuordnung der Spalten
+        const cardIndex = findColumnIndex(headers, ['card#', 'card', 'id', 'nr']);
+        const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube']);
         const targetId = parseInt(id, 10);
         const lines = csvContent.slice(1);
 
@@ -92,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         for (let row of lines) {
             if (parseInt(row[cardIndex], 10) === targetId) {
-                return row[urlIndex].trim();
+                return row[urlIndex] ? row[urlIndex].trim() : null;
             }
         }
         return null;
@@ -101,6 +113,44 @@ document.addEventListener('DOMContentLoaded', function () {
     setupEventListeners();
     getCookies();
 });
+
+// Mode=OHYES Erkennung in URL
+function checkUrlParameters() {
+    const urlParams = new URLSearchParams(window.location.search);
+    for (const [key, value] of urlParams.entries()) {
+        if (key.toLowerCase() === 'mode' && value.toLowerCase() === 'ohyes') {
+            enableAppOnlyMode(true);
+            break;
+        } else if (key.toUpperCase() === 'OHYES') {
+            enableAppOnlyMode(true);
+            break;
+        }
+    }
+}
+
+function enableAppOnlyMode(enable) {
+    appOnlyMode = enable;
+    const checkbox = document.getElementById('appOnlyMode');
+    if (checkbox) checkbox.checked = enable;
+    
+    const startScanBtn = document.getElementById("startScanButton");
+    if (startScanBtn) startScanBtn.innerHTML = enable ? "Next" : "Scan";
+    
+    const solveBtn = document.getElementById("solveButton");
+    if (solveBtn) solveBtn.style.display = enable ? 'block' : 'none';
+
+    setCookie("appOnlyMode", enable, 30);
+}
+
+// Visueller Lade-Status (Button Animation)
+function setLoadingState(loading) {
+    const playBtn = document.getElementById('startstop-video');
+    if (loading) {
+        playBtn.classList.add('is-loading');
+    } else {
+        playBtn.classList.remove('is-loading');
+    }
+}
 
 // YouTube API
 function onYouTubeIframeAPIReady() {
@@ -122,7 +172,15 @@ document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, document
 function onPlayerStateChange(event) {
     const playBtn = document.getElementById('startstop-video');
     
-    if (event.data == YT.PlayerState.CUED) {
+    if (event.data == YT.PlayerState.BUFFERING) {
+        setLoadingState(true);
+        // Autoplay-Verhalten bei neuen/gecueden Titeln ausführen
+        if (document.getElementById('autoplay').checked && !isPlaying) {
+            playVideoWithSettingsOptions();
+        }
+    }
+    else if (event.data == YT.PlayerState.CUED) {
+        setLoadingState(false);
         const videoData = player.getVideoData();
         document.getElementById('video-title').textContent = videoData.title;
         document.getElementById('video-duration').textContent = formatDuration(player.getDuration());
@@ -132,13 +190,16 @@ function onPlayerStateChange(event) {
         }
     }
     else if (event.data == YT.PlayerState.PLAYING) {
+        setLoadingState(false);
         playBtn.classList.add('is-playing');
         isPlaying = true;
         renderVisualizer();
     }
     else if (event.data == YT.PlayerState.PAUSED || event.data == YT.PlayerState.ENDED) {
+        setLoadingState(false);
         playBtn.classList.remove('is-playing');
         isPlaying = false;
+        clearTimeout(playbackTimer);
     }
 }
 
@@ -176,15 +237,19 @@ async function playVideoWithSettingsOptions() {
 
     player.playVideo();
 
-    if (document.getElementById('playback-duration-limit').checked) {
+    const durationLimitActive = document.getElementById('playback-duration-limit').checked;
+    if (durationLimitActive) {
+        targetPlayDuration = endTime - startTime;
+        playStartTime = Date.now();
+
         clearTimeout(playbackTimer);
         playbackTimer = setTimeout(() => {
             player.pauseVideo();
-        }, (endTime - startTime) * 1000);
+        }, targetPlayDuration * 1000);
     }
 }
 
-// Visualizer Wave Rendering
+// Visualizer Wave Rendering & Timer Ring
 function drawGlowingSineRing({ cx, cy, baseRadius, frequency, amplitude, phaseShift, color, glowColor, glowBlur, lineWidth }) {
     const points = 180;
     ctx.beginPath();
@@ -211,6 +276,35 @@ function drawGlowingSineRing({ cx, cy, baseRadius, frequency, amplitude, phaseSh
     ctx.shadowBlur = 0;
 }
 
+// Timer-Ring Rendering
+function drawTimerRing(cx, cy, radius) {
+    const isTimerActive = document.getElementById('playback-duration-limit').checked;
+    if (!isTimerActive || targetPlayDuration <= 0) return;
+
+    const elapsed = (Date.now() - playStartTime) / 1000;
+    const progress = Math.min(1, Math.max(0, elapsed / targetPlayDuration));
+    
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + (Math.PI * 2 * (1 - progress));
+
+    // Hintergrund-Ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    // Aktiver Countdown-Ring (schließt / baut ab im Uhrzeigersinn)
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, startAngle, endAngle, false);
+    ctx.strokeStyle = '#ff5400';
+    ctx.shadowColor = '#ff5400';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+}
+
 function renderVisualizer() {
     if (!isPlaying) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -224,6 +318,9 @@ function renderVisualizer() {
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
+    // Timer Ring unter der Welle rendern
+    drawTimerRing(cx, cy, 46);
+
     ctx.globalCompositeOperation = 'screen';
 
     const glowCyan = 'rgba(0, 212, 255, 0.8)';
@@ -234,6 +331,17 @@ function renderVisualizer() {
     drawGlowingSineRing({ cx, cy, baseRadius: 95, frequency: 16, amplitude: 6, phaseShift: phase * 1.4, color: 'rgba(100, 230, 255, 0.5)', glowColor: glowIce, glowBlur: 10, lineWidth: 2 });
 
     ctx.globalCompositeOperation = 'source-over';
+}
+
+// Dynamic CSV Column Finder
+function findColumnIndex(headers, possibleNames) {
+    if (!headers) return -1;
+    const cleanHeaders = headers.map(h => h.trim().toLowerCase());
+    for (const name of possibleNames) {
+        const idx = cleanHeaders.indexOf(name.toLowerCase());
+        if (idx !== -1) return idx;
+    }
+    return -1;
 }
 
 // Event Listeners
@@ -277,8 +385,17 @@ function setupEventListeners() {
     });
 
     document.getElementById('solveButton').addEventListener('click', function() {
-        if (lastRandomRow) {
-            document.getElementById("solveButton-overlay-text").innerHTML = `${lastRandomRow[1]}<br>${lastRandomRow[2]}<br>${lastRandomRow[6]}`;
+        if (lastRandomRow && lastCsvHeaders) {
+            // Dynamisches Auslesen anhand von Spaltennamen
+            const artistIdx = findColumnIndex(lastCsvHeaders, ['artist', 'interpret', 'künstler']);
+            const titleIdx = findColumnIndex(lastCsvHeaders, ['title', 'titel', 'song']);
+            const yearIdx = findColumnIndex(lastCsvHeaders, ['year', 'jahr', 'release']);
+
+            const artist = artistIdx !== -1 ? lastRandomRow[artistIdx] : (lastRandomRow[1] || '');
+            const title = titleIdx !== -1 ? lastRandomRow[titleIdx] : (lastRandomRow[2] || '');
+            const year = yearIdx !== -1 ? lastRandomRow[yearIdx] : (lastRandomRow[6] || lastRandomRow[3] || '');
+
+            document.getElementById("solveButton-overlay-text").innerHTML = `${artist}<br>${title}<br>${year}`;
             document.getElementById("solveButton-overlay").style.display = "block";
         }
     });
@@ -305,10 +422,7 @@ function setupEventListeners() {
     // Einstellungen
     document.getElementById('songinfo').addEventListener('click', updateSongInfo);
     document.getElementById('appOnlyMode').addEventListener('click', function() {
-        setCookie("appOnlyMode", this.checked, 30);
-        appOnlyMode = this.checked;
-        document.getElementById("startScanButton").innerHTML = appOnlyMode ? "Next" : "Scan";
-        document.getElementById("solveButton").style.display = appOnlyMode ? 'block' : 'none';
+        enableAppOnlyMode(this.checked);
     });
 }
 
@@ -334,6 +448,7 @@ async function getRandomPlaylistSong() {
             const youtubeLinkData = parseYoutubeLink(youtubeLink);
             if (youtubeLinkData) {
                 document.getElementById('video-id').textContent = youtubeLinkData.videoId;  
+                setLoadingState(true);
                 player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
             }
         }
@@ -343,8 +458,9 @@ async function getRandomPlaylistSong() {
 }
 
 function lookupYoutubeLinkRandom(csvContent) {
-    const headers = csvContent[0];
-    const urlIndex = headers.indexOf('URL');
+    const headers = csvContent[0].map(h => h.trim());
+    lastCsvHeaders = headers;
+    const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube']);
     const lines = csvContent.slice(1);
     if (urlIndex === -1 || lines.length === 0) return null;
 
@@ -363,7 +479,7 @@ async function getCachedCsv(url) {
 }
 
 function parseCSV(text) {
-    return text.split('\n').map(line => {
+    return text.split('\n').filter(line => line.trim() !== '').map(line => {
         const result = [];
         let startValueIdx = 0, inQuotes = false;
         for (let i = 0; i < line.length; i++) {
@@ -404,9 +520,8 @@ function getCookieValue(name) {
 function getCookies() {
     const isTrue = v => v === 'true';
     if (getCookieValue("appOnlyMode") !== null) {
-        appOnlyMode = isTrue(getCookieValue("appOnlyMode"));
-        document.getElementById('appOnlyMode').checked = appOnlyMode;
-        document.getElementById("startScanButton").innerHTML = appOnlyMode ? "Next" : "Scan";
-        document.getElementById("solveButton").style.display = appOnlyMode ? 'block' : 'none';
+        const active = isTrue(getCookieValue("appOnlyMode"));
+        enableAppOnlyMode(active);
     }
 }
+    
