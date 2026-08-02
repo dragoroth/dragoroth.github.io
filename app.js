@@ -1,9 +1,9 @@
 import QrScanner from "https://unpkg.com/qr-scanner/qr-scanner.min.js";
 
 let player; 
-let playbackTimer; 
+let playbackTimer = null; 
 let playbackDuration = 30; 
-let qrScanner;
+let qrScanner = null;
 let csvCache = {};
 let lastRandomRow = null;
 let lastCsvHeaders = [];
@@ -16,7 +16,7 @@ let targetPlayDuration = 0;
 
 // Visualizer Globale Variablen
 let canvas, ctx;
-let animId;
+let animId = null;
 let phase = 0;
 let isPlaying = false;
 
@@ -25,21 +25,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const video = document.getElementById('qr-video');
     canvas = document.getElementById('visualizer');
-    ctx = canvas.getContext('2d');
+    if (canvas) {
+        ctx = canvas.getContext('2d');
+    }
 
     checkUrlParameters();
     checkConsent();
 
     // QR-Scanner Initialisierung (Unabhängig von YouTube-Consent)
-    qrScanner = new QrScanner(video, result => {
-        if (result.data !== lastDecodedText) {
-            lastDecodedText = result.data;
-            handleScannedLink(result.data);
-        }
-    }, { 
-        highlightScanRegion: true,
-        highlightCodeOutline: true,
-    });
+    if (video) {
+        qrScanner = new QrScanner(video, result => {
+            if (result && result.data && result.data !== lastDecodedText) {
+                lastDecodedText = result.data;
+                handleScannedLink(result.data);
+            }
+        }, { 
+            highlightScanRegion: true,
+            highlightCodeOutline: true,
+        });
+    }
 
     async function handleScannedLink(decodedText) {
         let youtubeURL = "";
@@ -53,19 +57,18 @@ document.addEventListener('DOMContentLoaded', function () {
                     const youtubeLink = lookupYoutubeLink(hitsterData.id, csvContent);
                     if (youtubeLink) youtubeURL = youtubeLink;
                 } catch (error) {
-                    console.error("Failed to fetch CSV:", error);
+                    console.error("Fehler beim Laden der CSV:", error);
                 }
             }
         }
 
         const youtubeLinkData = parseYoutubeLink(youtubeURL);
         if (youtubeLinkData) {
-            qrScanner.stop(); 
-            document.getElementById('qr-reader').style.display = 'none'; 
-            document.getElementById('cancelScanButton').style.display = 'none'; 
+            stopQrScanner();
             lastDecodedText = ""; 
 
-            document.getElementById('video-id').textContent = youtubeLinkData.videoId;  
+            const videoIdEl = document.getElementById('video-id');
+            if (videoIdEl) videoIdEl.textContent = youtubeLinkData.videoId;  
             
             if (hasConsent()) {
                 setLoadingState(true);
@@ -91,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const match = url.match(regex);
         if (match) return { lang: match[1].replace(/\//g, "-"), id: match[2] };
 
-        const regexNordics = /^(?:http:\/\/|https:\/\/)?app.hitsternordics\.com\/resources\/songs\/(\d+)$/;
+        const regexNordics = /^(?:http:\/\/|https:\/\/)?app\.hitsternordics\.com\/resources\/songs\/(\d+)$/;
         const matchNordics = url.match(regexNordics);
         if (matchNordics) return { lang: matchNordics[1], id: matchNordics[2] };
 
@@ -99,6 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function lookupYoutubeLink(id, csvContent) {
+        if (!csvContent || csvContent.length === 0) return null;
         const headers = csvContent[0];
         lastCsvHeaders = headers;
         
@@ -120,6 +124,17 @@ document.addEventListener('DOMContentLoaded', function () {
     setupEventListeners();
     getCookies();
 });
+
+/* QR-Scanner Helper */
+function stopQrScanner() {
+    if (qrScanner) {
+        qrScanner.stop();
+    }
+    const qrReaderEl = document.getElementById('qr-reader');
+    const cancelBtn = document.getElementById('cancelScanButton');
+    if (qrReaderEl) qrReaderEl.style.display = 'none';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+}
 
 /* Consent Management (DSGVO-Konformität) */
 function hasConsent() {
@@ -159,7 +174,12 @@ function loadYouTubeApi() {
 
     const tag = document.createElement('script');
     tag.src = "https://www.youtube.com/iframe_api";
-    document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, document.getElementsByTagName('script')[0]);
+    const firstScript = document.getElementsByTagName('script')[0];
+    if (firstScript && firstScript.parentNode) {
+        firstScript.parentNode.insertBefore(tag, firstScript);
+    } else {
+        document.head.appendChild(tag);
+    }
 }
 
 function ensureYouTubeLoaded(callback) {
@@ -169,24 +189,20 @@ function ensureYouTubeLoaded(callback) {
     }
     if (!youtubeApiLoaded) {
         loadYouTubeApi();
-        const checkInterval = setInterval(() => {
-            if (player && typeof player.cueVideoById === 'function') {
-                clearInterval(checkInterval);
-                callback();
-            }
-        }, 100);
-    } else if (player && typeof player.cueVideoById === 'function') {
-        callback();
     }
+    
+    const checkInterval = setInterval(() => {
+        if (player && typeof player.cueVideoById === 'function') {
+            clearInterval(checkInterval);
+            callback();
+        }
+    }, 100);
 }
 
 function checkUrlParameters() {
     const urlParams = new URLSearchParams(window.location.search);
     for (const [key, value] of urlParams.entries()) {
-        if (key.toLowerCase() === 'mode' && value.toLowerCase() === 'ohyes') {
-            enableAppOnlyMode(true);
-            break;
-        } else if (key.toUpperCase() === 'OHYES') {
+        if ((key.toLowerCase() === 'mode' && value.toLowerCase() === 'ohyes') || key.toUpperCase() === 'OHYES') {
             enableAppOnlyMode(true);
             break;
         }
@@ -209,6 +225,7 @@ function enableAppOnlyMode(enable) {
 
 function setLoadingState(loading) {
     const playBtn = document.getElementById('startstop-video');
+    if (!playBtn) return;
     if (loading) {
         playBtn.classList.add('is-loading');
     } else {
@@ -218,39 +235,47 @@ function setLoadingState(loading) {
 
 function onPlayerStateChange(event) {
     const playBtn = document.getElementById('startstop-video');
-    
+    const autoPlayChecked = document.getElementById('autoplay') ? document.getElementById('autoplay').checked : false;
+
     if (event.data == YT.PlayerState.BUFFERING) {
         setLoadingState(true);
-        if (document.getElementById('autoplay').checked && !isPlaying) {
+        if (autoPlayChecked && !isPlaying) {
             playVideoWithSettingsOptions();
         }
     }
     else if (event.data == YT.PlayerState.CUED) {
         setLoadingState(false);
         const videoData = player.getVideoData();
-        document.getElementById('video-title').textContent = videoData.title;
-        document.getElementById('video-duration').textContent = formatDuration(player.getDuration());
+        const titleEl = document.getElementById('video-title');
+        const durationEl = document.getElementById('video-duration');
 
-        if (document.getElementById('autoplay').checked) {
+        if (titleEl) titleEl.textContent = videoData.title || '';
+        if (durationEl) durationEl.textContent = formatDuration(player.getDuration());
+
+        if (autoPlayChecked) {
             playVideoWithSettingsOptions();
         }
     }
     else if (event.data == YT.PlayerState.PLAYING) {
         setLoadingState(false);
-        playBtn.classList.add('is-playing');
+        if (playBtn) playBtn.classList.add('is-playing');
         isPlaying = true;
         if (playStartTime === 0) playStartTime = Date.now();
         renderVisualizer();
     }
     else if (event.data == YT.PlayerState.PAUSED || event.data == YT.PlayerState.ENDED) {
         setLoadingState(false);
-        playBtn.classList.remove('is-playing');
+        if (playBtn) playBtn.classList.remove('is-playing');
         isPlaying = false;
-        clearTimeout(playbackTimer);
+        if (playbackTimer) {
+            clearTimeout(playbackTimer);
+            playbackTimer = null;
+        }
     }
 }
 
 function formatDuration(duration) {
+    if (!duration || isNaN(duration)) return "0:00";
     const minutes = Math.floor(duration / 60);
     const seconds = Math.floor(duration % 60);
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
@@ -264,9 +289,11 @@ async function playVideoWithSettingsOptions() {
 
     const minStartPercentage = 0.10;
     const maxEndPercentage = 0.90;
-    let videoDuration = player.getDuration();
-    let startTime = player.getCurrentTime(); 
-    playbackDuration = parseInt(document.getElementById('playback-duration').value, 10) || 30;
+    let videoDuration = player.getDuration() || 0;
+    let startTime = player.getCurrentTime() || 0; 
+    
+    const playbackInput = document.getElementById('playback-duration');
+    playbackDuration = playbackInput ? (parseInt(playbackInput.value, 10) || 30) : 30;
     let endTime = startTime + playbackDuration;
 
     const minStartTime = Math.max(startTime, videoDuration * minStartPercentage);
@@ -283,18 +310,19 @@ async function playVideoWithSettingsOptions() {
         endTime = startTime + playbackDuration;
     }
 
-    if (document.getElementById('randomplayback').checked) {
+    const randomPlaybackChecked = document.getElementById('randomplayback') ? document.getElementById('randomplayback').checked : false;
+    if (randomPlaybackChecked) {
         player.seekTo(startTime, true);
     }
 
     player.playVideo();
 
-    const durationLimitActive = document.getElementById('playback-duration-limit').checked;
+    const durationLimitActive = document.getElementById('playback-duration-limit') ? document.getElementById('playback-duration-limit').checked : false;
     if (durationLimitActive) {
         targetPlayDuration = endTime - startTime;
         playStartTime = Date.now();
 
-        clearTimeout(playbackTimer);
+        if (playbackTimer) clearTimeout(playbackTimer);
         playbackTimer = setTimeout(() => {
             player.pauseVideo();
         }, targetPlayDuration * 1000);
@@ -305,6 +333,7 @@ async function playVideoWithSettingsOptions() {
 
 // Visualizer Wave Rendering & Timer Ring
 function drawGlowingSineRing({ cx, cy, baseRadius, frequency, amplitude, phaseShift, color, glowColor, glowBlur, lineWidth }) {
+    if (!ctx) return;
     const points = 180;
     ctx.beginPath();
 
@@ -331,7 +360,9 @@ function drawGlowingSineRing({ cx, cy, baseRadius, frequency, amplitude, phaseSh
 }
 
 function drawTimerRing(cx, cy, radius) {
-    const isTimerActive = document.getElementById('playback-duration-limit').checked;
+    if (!ctx) return;
+    const limitEl = document.getElementById('playback-duration-limit');
+    const isTimerActive = limitEl ? limitEl.checked : false;
     if (!isTimerActive || targetPlayDuration <= 0) return;
 
     const elapsed = (Date.now() - playStartTime) / 1000;
@@ -363,8 +394,10 @@ function drawTimerRing(cx, cy, radius) {
 }
 
 function renderVisualizer() {
+    if (!ctx || !canvas) return;
     if (!isPlaying) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (animId) cancelAnimationFrame(animId);
         return;
     }
 
@@ -402,7 +435,7 @@ function findColumnIndex(headers, possibleNames) {
     return -1;
 }
 
-// Event Listeners
+// Event Listeners Setup
 function setupEventListeners() {
     let timerAlertMessage = null;
 
@@ -433,124 +466,193 @@ function setupEventListeners() {
     }
 
     // Play/Stop Button
-    document.getElementById('startstop-video').addEventListener('click', function() {
-        if (!hasConsent()) {
-            showConsentBanner();
-            return;
-        }
-
-        if (!isPlaying) {
-            const playerState = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
-            
-            if (playerState === -1) {
-                const alertBox = document.getElementById('alertBox');
-                alertBox.innerText = appOnlyMode ? "Bitte erst 'Next' klicken!" : "Bitte erst scannen!";
-                alertBox.style.display = "block";
-                clearTimeout(timerAlertMessage);
-                timerAlertMessage = setTimeout(() => { alertBox.style.display = "none"; }, 2000);
+    const playStopBtn = document.getElementById('startstop-video');
+    if (playStopBtn) {
+        playStopBtn.addEventListener('click', function() {
+            if (!hasConsent()) {
+                showConsentBanner();
                 return;
             }
-            playVideoWithSettingsOptions();
-        } else {
-            player.pauseVideo();
-        }
-    });
 
-    document.getElementById('startScanButton').addEventListener('click', function() {
-        if (appOnlyMode) {
-            getRandomPlaylistSong();
-            return;
-        }
-        document.getElementById('cancelScanButton').style.display = 'block';
-        document.getElementById('qr-reader').style.display = 'block'; 
-        qrScanner.start().then(() => {
-            qrScanner.setInversionMode('both'); 
-        }).catch(err => console.error('QR Scanner failed', err));
-    });
+            if (!isPlaying) {
+                const playerState = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
+                
+                if (playerState === -1) {
+                    const alertBox = document.getElementById('alertBox');
+                    if (alertBox) {
+                        alertBox.innerText = appOnlyMode ? "Bitte erst 'Next' klicken!" : "Bitte erst scannen!";
+                        alertBox.style.display = "block";
+                        clearTimeout(timerAlertMessage);
+                        timerAlertMessage = setTimeout(() => { alertBox.style.display = "none"; }, 2000);
+                    }
+                    return;
+                }
+                playVideoWithSettingsOptions();
+            } else {
+                player.pauseVideo();
+            }
+        });
+    }
 
-    document.getElementById('cancelScanButton').addEventListener('click', function() {
-        qrScanner.stop();
-        document.getElementById('qr-reader').style.display = 'none';
-        document.getElementById('cancelScanButton').style.display = 'none';
-    });
+    // Scan / Next Button
+    const startScanBtn = document.getElementById('startScanButton');
+    if (startScanBtn) {
+        startScanBtn.addEventListener('click', function() {
+            if (appOnlyMode) {
+                getRandomPlaylistSong();
+                return;
+            }
+            const cancelBtn = document.getElementById('cancelScanButton');
+            const qrReaderEl = document.getElementById('qr-reader');
+            if (cancelBtn) cancelBtn.style.display = 'block';
+            if (qrReaderEl) qrReaderEl.style.display = 'block'; 
+            
+            if (qrScanner) {
+                qrScanner.start().then(() => {
+                    qrScanner.setInversionMode('both'); 
+                }).catch(err => console.error('QR-Scanner Start fehlgeschlagen:', err));
+            }
+        });
+    }
 
-    document.getElementById('solveButton').addEventListener('click', function() {
-        if (lastRandomRow && lastCsvHeaders) {
-            const artistIdx = findColumnIndex(lastCsvHeaders, ['artist', 'interpret', 'künstler', 'performer', 'author']);
-            const titleIdx = findColumnIndex(lastCsvHeaders, ['title', 'titel', 'song', 'track', 'name']);
-            const yearIdx = findColumnIndex(lastCsvHeaders, ['year', 'jahr', 'release', 'date', 'erscheinungsjahr']);
+    const cancelScanBtn = document.getElementById('cancelScanButton');
+    if (cancelScanBtn) {
+        cancelScanBtn.addEventListener('click', stopQrScanner);
+    }
 
-            const artist = (artistIdx !== -1 && lastRandomRow[artistIdx]) ? lastRandomRow[artistIdx] : (lastRandomRow[1] || '');
-            const title = (titleIdx !== -1 && lastRandomRow[titleIdx]) ? lastRandomRow[titleIdx] : (lastRandomRow[2] || '');
-            const year = (yearIdx !== -1 && lastRandomRow[yearIdx]) ? lastRandomRow[yearIdx] : (lastRandomRow[6] || lastRandomRow[3] || '');
+    // Solve Overlay
+    const solveBtn = document.getElementById('solveButton');
+    if (solveBtn) {
+        solveBtn.addEventListener('click', function() {
+            if (lastRandomRow && lastCsvHeaders) {
+                const artistIdx = findColumnIndex(lastCsvHeaders, ['artist', 'interpret', 'künstler', 'performer', 'author']);
+                const titleIdx = findColumnIndex(lastCsvHeaders, ['title', 'titel', 'song', 'track', 'name']);
+                const yearIdx = findColumnIndex(lastCsvHeaders, ['year', 'jahr', 'release', 'date', 'erscheinungsjahr']);
 
-            document.getElementById("solveButton-overlay-text").innerHTML = `${artist}<br>${title}<br>${year}`;
-            document.getElementById("solveButton-overlay").style.display = "block";
-        }
-    });
+                const artist = (artistIdx !== -1 && lastRandomRow[artistIdx]) ? lastRandomRow[artistIdx] : (lastRandomRow[1] || '');
+                const title = (titleIdx !== -1 && lastRandomRow[titleIdx]) ? lastRandomRow[titleIdx] : (lastRandomRow[2] || '');
+                const year = (yearIdx !== -1 && lastRandomRow[yearIdx]) ? lastRandomRow[yearIdx] : (lastRandomRow[6] || lastRandomRow[3] || '');
 
-    document.getElementById('solveButton-overlay').addEventListener('click', function() {
-        this.style.display = "none";
-    });
+                const overlayText = document.getElementById("solveButton-overlay-text");
+                const overlay = document.getElementById("solveButton-overlay");
+                if (overlayText) overlayText.innerHTML = `${artist}<br>${title}<br>${year}`;
+                if (overlay) overlay.style.display = "block";
+            }
+        });
+    }
 
-    document.getElementById('cb_settings').addEventListener('click', () => toggleDisplay('settings_div'));
-    document.getElementById('credits').addEventListener('click', () => toggleDisplay('credits_div'));
-    document.getElementById('menu-home-button').addEventListener('click', () => {
-        document.getElementById('menu-toggle').checked = false;
-    });
+    const solveOverlay = document.getElementById('solveButton-overlay');
+    if (solveOverlay) {
+        solveOverlay.addEventListener('click', function() {
+            this.style.display = "none";
+        });
+    }
 
+    // Menü-Navigation & Ansichten
+    const homeBtn = document.getElementById('menu-home-button');
+    if (homeBtn) {
+        homeBtn.addEventListener('click', () => {
+            closeMenu();
+            hideSection('settings_div');
+            hideSection('credits_div');
+        });
+    }
+
+    const settingsBtn = document.getElementById('cb_settings');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            toggleDisplay('settings_div');
+            hideSection('credits_div');
+            closeMenu();
+        });
+    }
+
+    const creditsBtn = document.getElementById('credits');
+    if (creditsBtn) {
+        creditsBtn.addEventListener('click', () => {
+            toggleDisplay('credits_div');
+            hideSection('settings_div');
+            closeMenu();
+        });
+    }
+
+    // Schließen des Menüs bei Klick außerhalb
     document.addEventListener('click', function(event) {
         const menuNav = document.querySelector('nav');
         const menuToggle = document.getElementById('menu-toggle');
-        if (menuToggle.checked && !menuNav.contains(event.target)) {
-            menuToggle.checked = false;
+        if (menuToggle && menuToggle.checked && menuNav && !menuNav.contains(event.target)) {
+            closeMenu();
         }
     });
 
-    document.getElementById('songinfo').addEventListener('click', updateSongInfo);
+    // Song-Info & Cookie-Anzeige
+    const songInfoBtn = document.getElementById('songinfo');
+    if (songInfoBtn) songInfoBtn.addEventListener('click', updateSongInfo);
     
     const cookiesToggle = document.getElementById('cookies');
-    if (cookiesToggle) {
-        cookiesToggle.addEventListener('click', updateCookieList);
-    }
+    if (cookiesToggle) cookiesToggle.addEventListener('click', updateCookieList);
 
-    document.getElementById('appOnlyMode').addEventListener('click', function() {
-        enableAppOnlyMode(this.checked);
-    });
+    const appOnlyCheckbox = document.getElementById('appOnlyMode');
+    if (appOnlyCheckbox) {
+        appOnlyCheckbox.addEventListener('click', function() {
+            enableAppOnlyMode(this.checked);
+        });
+    }
+}
+
+// Hilfsfunktionen für die Menüsteuerung
+function closeMenu() {
+    const menuToggle = document.getElementById('menu-toggle');
+    if (menuToggle) menuToggle.checked = false;
+}
+
+function hideSection(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
 }
 
 function toggleDisplay(id) {
     const el = document.getElementById(id);
-    el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    if (!el) return;
+    const isHidden = getComputedStyle(el).display === 'none';
+    el.style.display = isHidden ? 'block' : 'none';
 }
 
 function updateSongInfo() {
-    const display = document.getElementById('songinfo').checked ? 'block' : 'none';
-    document.getElementById('videoid').style.display = display;
-    document.getElementById('videotitle').style.display = display;
-    document.getElementById('videoduration').style.display = display;
+    const songInfoChecked = document.getElementById('songinfo') ? document.getElementById('songinfo').checked : false;
+    const display = songInfoChecked ? 'block' : 'none';
+    
+    const vId = document.getElementById('videoid');
+    const vTitle = document.getElementById('videotitle');
+    const vDur = document.getElementById('videoduration');
+
+    if (vId) vId.style.display = display;
+    if (vTitle) vTitle.style.display = display;
+    if (vDur) vDur.style.display = display;
 }
 
 function updateCookieList() {
     const list = document.getElementById('cookielist');
     if (!list) return;
-    const isChecked = document.getElementById('cookies').checked;
+    const isChecked = document.getElementById('cookies') ? document.getElementById('cookies').checked : false;
     list.style.display = isChecked ? 'block' : 'none';
     if (isChecked) {
         list.innerText = document.cookie || "Keine Cookies gesetzt.";
     }
 }
 
-// CSV/Playlist Helpers
+// CSV / Playlist Helpers
 async function getRandomPlaylistSong() {
     try {
-        const selectedList = document.getElementById("songlist-picker").value;
+        const picker = document.getElementById("songlist-picker");
+        const selectedList = picker ? picker.value : "hitster-de.csv";
         const csvContent = await getCachedCsv(`/${selectedList}`);
         const youtubeLink = lookupYoutubeLinkRandom(csvContent);
         if (youtubeLink) {
             const youtubeLinkData = parseYoutubeLink(youtubeLink);
             if (youtubeLinkData) {
-                document.getElementById('video-id').textContent = youtubeLinkData.videoId;  
+                const videoIdEl = document.getElementById('video-id');
+                if (videoIdEl) videoIdEl.textContent = youtubeLinkData.videoId;  
                 
                 if (hasConsent()) {
                     setLoadingState(true);
@@ -563,11 +665,12 @@ async function getRandomPlaylistSong() {
             }
         }
     } catch (error) {
-        console.error("Failed to fetch CSV:", error);
+        console.error("Fehler beim Abrufen der zufälligen CSV:", error);
     }
 }
 
 function lookupYoutubeLinkRandom(csvContent) {
+    if (!csvContent || csvContent.length <= 1) return null;
     const headers = csvContent[0];
     lastCsvHeaders = headers;
     const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube', 'video']);
@@ -606,6 +709,7 @@ function parseCSV(text) {
 }
 
 function parseYoutubeLink(url) {
+    if (!url) return null;
     url = decodeURIComponent(url);
     const regex = /^https?:\/\/(www\.youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)(.{11}).*/;
     const match = url.match(regex);
@@ -620,7 +724,7 @@ function parseYoutubeLink(url) {
 
 // Cookies Persistence
 function setCookie(name, value, days) {
-    document.cookie = `${name}=${value};max-age=${days * 86400}`;
+    document.cookie = `${name}=${value};max-age=${days * 86400};path=/`;
 }
 
 function getCookieValue(name) {
