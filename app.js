@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
     checkUrlParameters();
     checkConsent();
 
-    // QR-Scanner Initialisierung (Unabhängig von YouTube-Consent)
+    // QR-Scanner Initialisierung
     if (video) {
         qrScanner = new QrScanner(video, result => {
             if (result && result.data && result.data !== lastDecodedText) {
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', function () {
     getCookies();
 });
 
-/* QR-Scanner Helper */
+/* Helper Funktionen */
 function stopQrScanner() {
     if (qrScanner) {
         qrScanner.stop();
@@ -136,7 +136,6 @@ function stopQrScanner() {
     if (cancelBtn) cancelBtn.style.display = 'none';
 }
 
-/* Consent Management (DSGVO-Konformität) */
 function hasConsent() {
     return localStorage.getItem('yt_consent') === 'granted';
 }
@@ -331,7 +330,7 @@ async function playVideoWithSettingsOptions() {
     }
 }
 
-// Visualizer Wave Rendering & Timer Ring
+// Visualizer & Canvas
 function drawGlowingSineRing({ cx, cy, baseRadius, frequency, amplitude, phaseShift, color, glowColor, glowBlur, lineWidth }) {
     if (!ctx) return;
     const points = 180;
@@ -433,6 +432,35 @@ function findColumnIndex(headers, possibleNames) {
         if (idx !== -1) return idx;
     }
     return -1;
+}
+
+// Global sichtbare Hilfsfunktionen für Bereichs-Umschaltung
+function closeMenu() {
+    const menuToggle = document.getElementById('menu-toggle');
+    if (menuToggle) menuToggle.checked = false;
+}
+
+function hideSection(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.style.display = 'none';
+    }
+}
+
+function toggleDisplay(id) {
+    const el = document.getElementById(id);
+    if (!el) {
+        console.warn(`Element mit ID '${id}' konnte im DOM nicht gefunden werden.`);
+        return;
+    }
+    const currentStyle = window.getComputedStyle(el).display;
+    if (currentStyle === 'none') {
+        el.style.display = 'block';
+        el.style.visibility = 'visible';
+        el.style.opacity = '1';
+    } else {
+        el.style.display = 'none';
+    }
 }
 
 // Event Listeners Setup
@@ -548,39 +576,44 @@ function setupEventListeners() {
         });
     }
 
-    // Menü-Navigation & Ansichten
-    const homeBtn = document.getElementById('menu-home-button');
-    if (homeBtn) {
-        homeBtn.addEventListener('click', () => {
-            closeMenu();
-            hideSection('settings_div');
-            hideSection('credits_div');
-        });
-    }
+    // ROBUSTES MENÜ-HANDLING (Event Delegation)
+    // Fängt alle Klicks im Navigationsbereich ab, unabhängig von genauer HTML-Reihenfolge
+    document.addEventListener('click', function(e) {
+        const target = e.target.closest('a, button, li, [id]');
+        if (!target) return;
 
-    const settingsBtn = document.getElementById('cb_settings');
-    if (settingsBtn) {
-        settingsBtn.addEventListener('click', () => {
-            toggleDisplay('settings_div');
-            hideSection('credits_div');
-            closeMenu();
-        });
-    }
+        const id = target.id || '';
+        const href = target.getAttribute ? (target.getAttribute('href') || '') : '';
+        const textContent = target.textContent ? target.textContent.trim().toLowerCase() : '';
 
-    const creditsBtn = document.getElementById('credits');
-    if (creditsBtn) {
-        creditsBtn.addEventListener('click', () => {
-            toggleDisplay('credits_div');
-            hideSection('settings_div');
-            closeMenu();
-        });
-    }
+        // Prüfe ob ein Menü-Element getroffen wurde
+        const isHome = id === 'menu-home-button' || href === '#home' || textContent === 'home';
+        const isSettings = id === 'cb_settings' || id === 'settings' || href.includes('settings') || textContent.includes('einstellung');
+        const isCredits = id === 'credits' || href.includes('credits') || textContent.includes('credit');
 
-    // Schließen des Menüs bei Klick außerhalb
-    document.addEventListener('click', function(event) {
+        if (isHome || isSettings || isCredits) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (isHome) {
+                hideSection('settings_div');
+                hideSection('credits_div');
+            } else if (isSettings) {
+                hideSection('credits_div');
+                toggleDisplay('settings_div');
+            } else if (isCredits) {
+                hideSection('settings_div');
+                toggleDisplay('credits_div');
+            }
+
+            closeMenu();
+            return;
+        }
+
+        // Schließen bei Klick außerhalb der Navigation
         const menuNav = document.querySelector('nav');
         const menuToggle = document.getElementById('menu-toggle');
-        if (menuToggle && menuToggle.checked && menuNav && !menuNav.contains(event.target)) {
+        if (menuToggle && menuToggle.checked && menuNav && !menuNav.contains(e.target) && !e.target.matches('label[for="menu-toggle"]')) {
             closeMenu();
         }
     });
@@ -598,24 +631,6 @@ function setupEventListeners() {
             enableAppOnlyMode(this.checked);
         });
     }
-}
-
-// Hilfsfunktionen für die Menüsteuerung
-function closeMenu() {
-    const menuToggle = document.getElementById('menu-toggle');
-    if (menuToggle) menuToggle.checked = false;
-}
-
-function hideSection(id) {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-}
-
-function toggleDisplay(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const isHidden = getComputedStyle(el).display === 'none';
-    el.style.display = isHidden ? 'block' : 'none';
 }
 
 function updateSongInfo() {
