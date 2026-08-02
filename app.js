@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', function () {
     checkUrlParameters();
     checkConsent();
 
-    // QR-Scanner
+    // QR-Scanner Initialisierung (Unabhängig von YouTube-Consent)
     qrScanner = new QrScanner(video, result => {
         if (result.data !== lastDecodedText) {
             lastDecodedText = result.data;
@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     setupEventListeners();
-    loadStoredSettings();
+    getCookies();
 });
 
 /* Consent Management (DSGVO-Konformität) */
@@ -133,11 +133,13 @@ function checkConsent() {
 }
 
 function showConsentBanner() {
-    document.getElementById('consent-banner').style.display = 'flex';
+    const banner = document.getElementById('consent-banner');
+    if (banner) banner.style.display = 'flex';
 }
 
 function hideConsentBanner() {
-    document.getElementById('consent-banner').style.display = 'none';
+    const banner = document.getElementById('consent-banner');
+    if (banner) banner.style.display = 'none';
 }
 
 function loadYouTubeApi() {
@@ -202,7 +204,7 @@ function enableAppOnlyMode(enable) {
     const solveBtn = document.getElementById("solveButton");
     if (solveBtn) solveBtn.style.display = enable ? 'block' : 'none';
 
-    localStorage.setItem("appOnlyMode", enable);
+    setCookie("appOnlyMode", enable, 30);
 }
 
 function setLoadingState(loading) {
@@ -404,22 +406,33 @@ function findColumnIndex(headers, possibleNames) {
 function setupEventListeners() {
     let timerAlertMessage = null;
 
-    document.getElementById('acceptConsent').addEventListener('click', function() {
-        localStorage.setItem('yt_consent', 'granted');
-        hideConsentBanner();
-        loadYouTubeApi();
-    });
+    // Consent Banner Listeners
+    const acceptBtn = document.getElementById('acceptConsent');
+    if (acceptBtn) {
+        acceptBtn.addEventListener('click', function() {
+            localStorage.setItem('yt_consent', 'granted');
+            hideConsentBanner();
+            loadYouTubeApi();
+        });
+    }
 
-    document.getElementById('denyConsent').addEventListener('click', function() {
-        localStorage.setItem('yt_consent', 'denied');
-        hideConsentBanner();
-    });
+    const denyBtn = document.getElementById('denyConsent');
+    if (denyBtn) {
+        denyBtn.addEventListener('click', function() {
+            localStorage.setItem('yt_consent', 'denied');
+            hideConsentBanner();
+        });
+    }
 
-    document.getElementById('revokeConsentBtn').addEventListener('click', function() {
-        localStorage.removeItem('yt_consent');
-        showConsentBanner();
-    });
+    const revokeBtn = document.getElementById('revokeConsentBtn');
+    if (revokeBtn) {
+        revokeBtn.addEventListener('click', function() {
+            localStorage.removeItem('yt_consent');
+            showConsentBanner();
+        });
+    }
 
+    // Play/Stop Button
     document.getElementById('startstop-video').addEventListener('click', function() {
         if (!hasConsent()) {
             showConsentBanner();
@@ -495,6 +508,12 @@ function setupEventListeners() {
     });
 
     document.getElementById('songinfo').addEventListener('click', updateSongInfo);
+    
+    const cookiesToggle = document.getElementById('cookies');
+    if (cookiesToggle) {
+        cookiesToggle.addEventListener('click', updateCookieList);
+    }
+
     document.getElementById('appOnlyMode').addEventListener('click', function() {
         enableAppOnlyMode(this.checked);
     });
@@ -512,6 +531,16 @@ function updateSongInfo() {
     document.getElementById('videoduration').style.display = display;
 }
 
+function updateCookieList() {
+    const list = document.getElementById('cookielist');
+    if (!list) return;
+    const isChecked = document.getElementById('cookies').checked;
+    list.style.display = isChecked ? 'block' : 'none';
+    if (isChecked) {
+        list.innerText = document.cookie || "Keine Cookies gesetzt.";
+    }
+}
+
 // CSV/Playlist Helpers
 async function getRandomPlaylistSong() {
     try {
@@ -523,10 +552,14 @@ async function getRandomPlaylistSong() {
             if (youtubeLinkData) {
                 document.getElementById('video-id').textContent = youtubeLinkData.videoId;  
                 
-                ensureYouTubeLoaded(() => {
+                if (hasConsent()) {
                     setLoadingState(true);
-                    player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
-                });
+                    ensureYouTubeLoaded(() => {
+                        player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
+                    });
+                } else {
+                    showConsentBanner();
+                }
             }
         }
     } catch (error) {
@@ -564,4 +597,41 @@ function parseCSV(text) {
             if (line[i] === '"' && line[i-1] !== '\\') inQuotes = !inQuotes;
             else if (line[i] === ',' && !inQuotes) {
                 result.push(line.substring(startValueIdx, i).trim().replace(/^"(.*)"$/, '$1'));
-                startValueIdx = i + 
+                startValueIdx = i + 1;
+            }
+        }
+        result.push(line.substring(startValueIdx).trim().replace(/^"(.*)"$/, '$1'));
+        return result;
+    });
+}
+
+function parseYoutubeLink(url) {
+    url = decodeURIComponent(url);
+    const regex = /^https?:\/\/(www\.youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)(.{11}).*/;
+    const match = url.match(regex);
+    if (match) {
+        const queryParams = new URLSearchParams(url.split('?')[1] || '');
+        const videoId = match[2];
+        let startTime = parseInt(queryParams.get('start') || queryParams.get('t'), 10) || 0;
+        return { videoId, startTime };
+    }
+    return null;
+}
+
+// Cookies Persistence
+function setCookie(name, value, days) {
+    document.cookie = `${name}=${value};max-age=${days * 86400}`;
+}
+
+function getCookieValue(name) {
+    const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+    return match ? match[2] : null;
+}
+
+function getCookies() {
+    const isTrue = v => v === 'true';
+    if (getCookieValue("appOnlyMode") !== null) {
+        const active = isTrue(getCookieValue("appOnlyMode"));
+        enableAppOnlyMode(active);
+    }
+}
