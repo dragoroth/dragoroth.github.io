@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     setupEventListeners();
+    setupMenuHandlers();
     getCookies();
 });
 
@@ -447,20 +448,10 @@ function hideSection(id) {
     }
 }
 
-function toggleDisplay(id) {
-    const el = document.getElementById(id);
-    if (!el) {
-        console.warn(`Element mit ID '${id}' konnte im DOM nicht gefunden werden.`);
-        return;
-    }
-    const currentStyle = window.getComputedStyle(el).display;
-    if (currentStyle === 'none') {
-        el.style.display = 'block';
-        el.style.visibility = 'visible';
-        el.style.opacity = '1';
-    } else {
-        el.style.display = 'none';
-    }
+function closeMenuAndOverlays() {
+    closeMenu();
+    hideSection('settings_div');
+    hideSection('credits_div');
 }
 
 // Event Listeners Setup
@@ -575,182 +566,59 @@ function setupEventListeners() {
             this.style.display = "none";
         });
     }
+}
 
-    // ROBUSTES MENÜ-HANDLING (Event Delegation)
-    // Fängt alle Klicks im Navigationsbereich ab, unabhängig von genauer HTML-Reihenfolge
-    document.addEventListener('click', function(e) {
-        const target = e.target.closest('a, button, li, [id]');
-        if (!target) return;
+// Menü & Overlay Steuerung
+function setupMenuHandlers() {
+    const navElement = document.querySelector('nav');
+    const settingsDiv = document.getElementById('settings_div');
+    const creditsDiv = document.getElementById('credits_div');
 
-        const id = target.id || '';
-        const href = target.getAttribute ? (target.getAttribute('href') || '') : '';
-        const textContent = target.textContent ? target.textContent.trim().toLowerCase() : '';
+    if (navElement) {
+        navElement.addEventListener('click', function(event) {
+            const link = event.target.closest('a');
+            if (!link) return;
 
-        // Prüfe ob ein Menü-Element getroffen wurde
-        const isHome = id === 'menu-home-button' || href === '#home' || textContent === 'home';
-        const isSettings = id === 'cb_settings' || id === 'settings' || href.includes('settings') || textContent.includes('einstellung');
-        const isCredits = id === 'credits' || href.includes('credits') || textContent.includes('credit');
+            const id = link.id;
 
-        if (isHome || isSettings || isCredits) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            if (isHome) {
-                hideSection('settings_div');
-                hideSection('credits_div');
-            } else if (isSettings) {
-                hideSection('credits_div');
-                toggleDisplay('settings_div');
-            } else if (isCredits) {
-                hideSection('settings_div');
-                toggleDisplay('credits_div');
+            // Klick auf Settings: Umschalten & Menü OFFEN LASSEN
+            if (id === 'cb_settings') {
+                event.preventDefault();
+                const isOpen = settingsDiv && settingsDiv.style.display === 'block';
+                if (settingsDiv) settingsDiv.style.display = isOpen ? 'none' : 'block';
+                if (creditsDiv) creditsDiv.style.display = 'none';
+                return;
             }
 
-            closeMenu();
-            return;
-        }
+            // Klick auf Credits: Umschalten & Menü OFFEN LASSEN
+            if (id === 'credits') {
+                event.preventDefault();
+                const isOpen = creditsDiv && creditsDiv.style.display === 'block';
+                if (creditsDiv) creditsDiv.style.display = 'block' ? 'none' : 'block';
+                if (settingsDiv) settingsDiv.style.display = 'none';
+                return;
+            }
 
-        // Schließen bei Klick außerhalb der Navigation
-        const menuNav = document.querySelector('nav');
-        const menuToggle = document.getElementById('menu-toggle');
-        if (menuToggle && menuToggle.checked && menuNav && !menuNav.contains(e.target) && !e.target.matches('label[for="menu-toggle"]')) {
-            closeMenu();
-        }
-    });
+            // Klick auf Home: Menü & Overlays schließen
+            if (id === 'menu-home-button') {
+                event.preventDefault();
+                closeMenuAndOverlays();
+                return;
+            }
 
-    // Song-Info & Cookie-Anzeige
-    const songInfoBtn = document.getElementById('songinfo');
-    if (songInfoBtn) songInfoBtn.addEventListener('click', updateSongInfo);
-    
-    const cookiesToggle = document.getElementById('cookies');
-    if (cookiesToggle) cookiesToggle.addEventListener('click', updateCookieList);
-
-    const appOnlyCheckbox = document.getElementById('appOnlyMode');
-    if (appOnlyCheckbox) {
-        appOnlyCheckbox.addEventListener('click', function() {
-            enableAppOnlyMode(this.checked);
+            // Klicks auf Impressum / Privacy schliessen ebenfalls das Menü
+            closeMenuAndOverlays();
         });
     }
-}
 
-function updateSongInfo() {
-    const songInfoChecked = document.getElementById('songinfo') ? document.getElementById('songinfo').checked : false;
-    const display = songInfoChecked ? 'block' : 'none';
-    
-    const vId = document.getElementById('videoid');
-    const vTitle = document.getElementById('videotitle');
-    const vDur = document.getElementById('videoduration');
+    // Klick AUSSERHALB von Nav, Settings & Credits schließt das Menü
+    document.addEventListener('click', function(event) {
+        const isClickInsideNav = navElement && navElement.contains(event.target);
+        const isClickInsideSettings = settingsDiv && settingsDiv.contains(event.target);
+        const isClickInsideCredits = creditsDiv && creditsDiv.contains(event.target);
 
-    if (vId) vId.style.display = display;
-    if (vTitle) vTitle.style.display = display;
-    if (vDur) vDur.style.display = display;
-}
-
-function updateCookieList() {
-    const list = document.getElementById('cookielist');
-    if (!list) return;
-    const isChecked = document.getElementById('cookies') ? document.getElementById('cookies').checked : false;
-    list.style.display = isChecked ? 'block' : 'none';
-    if (isChecked) {
-        list.innerText = document.cookie || "Keine Cookies gesetzt.";
-    }
-}
-
-// CSV / Playlist Helpers
-async function getRandomPlaylistSong() {
-    try {
-        const picker = document.getElementById("songlist-picker");
-        const selectedList = picker ? picker.value : "hitster-de.csv";
-        const csvContent = await getCachedCsv(`/${selectedList}`);
-        const youtubeLink = lookupYoutubeLinkRandom(csvContent);
-        if (youtubeLink) {
-            const youtubeLinkData = parseYoutubeLink(youtubeLink);
-            if (youtubeLinkData) {
-                const videoIdEl = document.getElementById('video-id');
-                if (videoIdEl) videoIdEl.textContent = youtubeLinkData.videoId;  
-                
-                if (hasConsent()) {
-                    setLoadingState(true);
-                    ensureYouTubeLoaded(() => {
-                        player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
-                    });
-                } else {
-                    showConsentBanner();
-                }
-            }
+        if (!isClickInsideNav && !isClickInsideSettings && !isClickInsideCredits) {
+            closeMenuAndOverlays();
         }
-    } catch (error) {
-        console.error("Fehler beim Abrufen der zufälligen CSV:", error);
-    }
-}
-
-function lookupYoutubeLinkRandom(csvContent) {
-    if (!csvContent || csvContent.length <= 1) return null;
-    const headers = csvContent[0];
-    lastCsvHeaders = headers;
-    const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube', 'video']);
-    const lines = csvContent.slice(1);
-    if (urlIndex === -1 || lines.length === 0) return null;
-
-    const targetId = Math.floor(Math.random() * lines.length);
-    lastRandomRow = lines[targetId];
-    return lastRandomRow[urlIndex] ? lastRandomRow[urlIndex].trim() : null;
-}
-
-async function getCachedCsv(url) {
-    if (!csvCache[url]) {
-        const response = await fetch(url);
-        const data = await response.text();
-        csvCache[url] = parseCSV(data);
-    }
-    return csvCache[url];
-}
-
-function parseCSV(text) {
-    const cleanText = text.replace(/^\ufeff/, '');
-    return cleanText.split(/\r?\n/).filter(line => line.trim() !== '').map(line => {
-        const result = [];
-        let startValueIdx = 0, inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-            if (line[i] === '"' && line[i-1] !== '\\') inQuotes = !inQuotes;
-            else if (line[i] === ',' && !inQuotes) {
-                result.push(line.substring(startValueIdx, i).trim().replace(/^"(.*)"$/, '$1'));
-                startValueIdx = i + 1;
-            }
-        }
-        result.push(line.substring(startValueIdx).trim().replace(/^"(.*)"$/, '$1'));
-        return result;
     });
-}
-
-function parseYoutubeLink(url) {
-    if (!url) return null;
-    url = decodeURIComponent(url);
-    const regex = /^https?:\/\/(www\.youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)(.{11}).*/;
-    const match = url.match(regex);
-    if (match) {
-        const queryParams = new URLSearchParams(url.split('?')[1] || '');
-        const videoId = match[2];
-        let startTime = parseInt(queryParams.get('start') || queryParams.get('t'), 10) || 0;
-        return { videoId, startTime };
-    }
-    return null;
-}
-
-// Cookies Persistence
-function setCookie(name, value, days) {
-    document.cookie = `${name}=${value};max-age=${days * 86400};path=/`;
-}
-
-function getCookieValue(name) {
-    const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
-    return match ? match[2] : null;
-}
-
-function getCookies() {
-    const isTrue = v => v === 'true';
-    if (getCookieValue("appOnlyMode") !== null) {
-        const active = isTrue(getCookieValue("appOnlyMode"));
-        enableAppOnlyMode(active);
-    }
 }
