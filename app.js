@@ -123,7 +123,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     setupEventListeners();
     setupMenuHandlers();
-    getCookies();
 });
 
 /* Helper Funktionen */
@@ -219,8 +218,6 @@ function enableAppOnlyMode(enable) {
     
     const solveBtn = document.getElementById("solveButton");
     if (solveBtn) solveBtn.style.display = enable ? 'block' : 'none';
-
-    setCookie("appOnlyMode", enable, 30);
 }
 
 function setLoadingState(loading) {
@@ -435,7 +432,7 @@ function findColumnIndex(headers, possibleNames) {
     return -1;
 }
 
-// Global sichtbare Hilfsfunktionen für Bereichs-Umschaltung
+// Global sichtbare Hilfsfunktionen für Menü-Schließung
 function closeMenu() {
     const menuToggle = document.getElementById('menu-toggle');
     if (menuToggle) menuToggle.checked = false;
@@ -568,56 +565,64 @@ function setupEventListeners() {
     }
 }
 
-// Menü & Overlay Steuerung
+// Menü & Akkordeon-Steuerung
 function setupMenuHandlers() {
     const navElement = document.querySelector('nav');
     const settingsDiv = document.getElementById('settings_div');
     const creditsDiv = document.getElementById('credits_div');
 
-    if (navElement) {
-        navElement.addEventListener('click', function(event) {
-            const link = event.target.closest('a');
-            if (!link) return;
+    if (!navElement) return;
 
-            const id = link.id;
-
-            // Klick auf Settings: Umschalten & Menü OFFEN LASSEN
-            if (id === 'cb_settings') {
-                event.preventDefault();
-                const isOpen = settingsDiv && settingsDiv.style.display === 'block';
-                if (settingsDiv) settingsDiv.style.display = isOpen ? 'none' : 'block';
-                if (creditsDiv) creditsDiv.style.display = 'none';
-                return;
-            }
-
-            // Klick auf Credits: Umschalten & Menü OFFEN LASSEN
-            if (id === 'credits') {
-                event.preventDefault();
-                const isOpen = creditsDiv && creditsDiv.style.display === 'block';
-                if (creditsDiv) creditsDiv.style.display = 'block' ? 'none' : 'block';
-                if (settingsDiv) settingsDiv.style.display = 'none';
-                return;
-            }
-
-            // Klick auf Home: Menü & Overlays schließen
-            if (id === 'menu-home-button') {
-                event.preventDefault();
-                closeMenuAndOverlays();
-                return;
-            }
-
-            // Klicks auf Impressum / Privacy schliessen ebenfalls das Menü
-            closeMenuAndOverlays();
+    // 1. Verhindere, dass Klicks INNERHALB von Settings & Credits das Hauptmenü schließen
+    if (settingsDiv) {
+        settingsDiv.addEventListener('click', function(event) {
+            event.stopPropagation();
         });
     }
 
-    // Klick AUSSERHALB von Nav, Settings & Credits schließt das Menü
-    document.addEventListener('click', function(event) {
-        const isClickInsideNav = navElement && navElement.contains(event.target);
-        const isClickInsideSettings = settingsDiv && settingsDiv.contains(event.target);
-        const isClickInsideCredits = creditsDiv && creditsDiv.contains(event.target);
+    if (creditsDiv) {
+        creditsDiv.addEventListener('click', function(event) {
+            event.stopPropagation();
+        });
+    }
 
-        if (!isClickInsideNav && !isClickInsideSettings && !isClickInsideCredits) {
+    // 2. Klick-Steuerung für Navigations-Links
+    navElement.addEventListener('click', function(event) {
+        const link = event.target.closest('a');
+        
+        if (!link) return;
+
+        const id = link.id;
+
+        // Klick auf "Einstellungen": Untermenü umschalten, Menü BLEIBT OFFEN
+        if (id === 'cb_settings') {
+            event.preventDefault();
+            event.stopPropagation();
+            const isOpen = settingsDiv && settingsDiv.style.display === 'block';
+            if (settingsDiv) settingsDiv.style.display = isOpen ? 'none' : 'block';
+            if (creditsDiv) creditsDiv.style.display = 'none';
+            return;
+        }
+
+        // Klick auf "Credits": Untermenü umschalten, Menü BLEIBT OFFEN
+        if (id === 'credits') {
+            event.preventDefault();
+            event.stopPropagation();
+            const isOpen = creditsDiv && creditsDiv.style.display === 'block';
+            if (creditsDiv) creditsDiv.style.display = isOpen ? 'none' : 'block';
+            if (settingsDiv) settingsDiv.style.display = 'none';
+            return;
+        }
+
+        // Klick auf "Home" oder externe Seiten (Impressum / Privacy): Menü schließen
+        if (id === 'menu-home-button' || link.getAttribute('href') !== '#') {
+            closeMenuAndOverlays();
+        }
+    });
+
+    // 3. Klick AUSSERHALB von <nav> schließt das Menü
+    document.addEventListener('click', function(event) {
+        if (!navElement.contains(event.target)) {
             closeMenuAndOverlays();
         }
     });
