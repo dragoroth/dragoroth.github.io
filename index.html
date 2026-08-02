@@ -18,77 +18,78 @@
             <input type="checkbox" id="menu-toggle">
             <label for="menu-toggle" class="menu-icon">☰</label>
             <ul class="menu" id="menu">
-                <li id="menu-home-button" class="menu-main-class"><a href="#"><span>🏠</span> Home</a></li>
-                
-                <li id="cb_settings" class="menu-main-class"><a href="#"><span>⚙️</span> Einstellungen</a></li>
-                <div id="settings_div" class="settings_div">
-                    <div class="menusubitem">
-                        <label class="switch">
-                            <input type="checkbox" id="autoplay" name="autoplay">
-                            <span class="slider round"></span>
-                        </label>
-                        <label for="autoplay">Autoplay</label>
-                    </div>
-                    <div class="menusubitem">
-                        <label class="switch">
-                            <input type="checkbox" id="randomplayback" name="randomplayback">
-                            <span class="slider round"></span>
-                        </label>
-                        <label for="randomplayback">Zufällige Wiedergabe</label>
-                    </div>
-                    <div class="menusubitem">
-                        <label class="switch">
-                            <input type="checkbox" id="playback-duration-limit" name="playback-duration-limit">
-                            <span class="slider round"></span>
-                        </label>
-                        <label for="playback-duration-limit">Zeitlimit (s):</label>
-                        <input type="number" min="5" id="playback-duration" value="30">
-                    </div>
-                    <div class="menusubitem">
-                        <label class="switch">
-                            <input type="checkbox" id="songinfo" name="songinfo">
-                            <span class="slider round"></span>
-                        </label>
-                        <label for="songinfo">Song-Infos anzeigen</label>
-                    </div>
-                    <div class="menusubitem">
-                        <label class="switch">
-                            <input type="checkbox" id="appOnlyMode" name="appOnlyMode">
-                            <span class="slider round"></span>
-                        </label>
-                        <label for="appOnlyMode">Zufall statt Scan</label>
-                    </div>
-                    <div class="menusubitem songlist-select">
-                        <label for="songlist-picker">Song-Liste:</label>
-                        <select name="songlist-picker" id="songlist-picker">
-                            <option>hitster-de.csv</option>
-                            <option>hitster-nordics.csv</option>
-                            <option>hitster-de-aaaa0007.csv</option>
-                            <option>hitster-de-aaaa0012.csv</option>
-                            <option>hitster-de-aaaa0015.csv</option>
-                        </select>
-                    </div>
-                    <div class="menusubitem">
-                        <button id="revokeConsentBtn" class="btn-secondary">Consent-Einstellungen ändern</button>
-                    </div>
-                </div>
-
-                <li id="credits" class="menu-main-class"><a href="#"><span>⭐</span> Credits</a></li>
-                <div id="credits_div" class="credits_div">
-                    <span id="creditlist">
-                        <div id="widmung"></div>
-                        Original code by andygruber:<br>
-                        <a href="https://github.com/andygruber/songseeker/" target="_blank">Songseeker - Github</a>
-                    </span>
-                </div>
-
-                <li id="legal-imprint" class="menu-main-class"><a href="imprint.html">Impressum</a></li>
-                <li id="privacy" class="menu-main-class"><a href="privacy_statement.html">Datenschutzerklärung</a></li>
+                <li class="menu-main-class"><a href="#" id="menu-home-button"><span>🏠</span> Home</a></li>
+                <li class="menu-main-class"><a href="#" id="cb_settings"><span>⚙️</span> Einstellungen</a></li>
+                <li class="menu-main-class"><a href="#" id="credits"><span>⭐</span> Credits</a></li>
+                <li class="menu-main-class" id="legal-imprint"><a href="imprint.html">Impressum</a></li>
+                <li class="menu-main-class" id="privacy"><a href="privacy_statement.html">Datenschutzerklärung</a></li>
             </ul>
         </nav>
     </header>
 
     <main>
+        <!-- Einstellungs-Bereich (Ausserhalb des nav-Elements) -->
+        <div id="settings_div" class="settings_div" style="display: none;">
+            <div class="menusubitem">
+                <label class="switch">
+                    <input type="checkbox" id="autoplay" name="autoplay">
+                    <span class="slider round"></span>
+                </label>
+                <label for="autoplay">Autoplay</label>
+            </div>
+            <div class="menusubitem">
+                <label class="switch">
+                    <input type="checkbox" id="randomplayback" name="randomplayback">
+                    <span class="slider round"></span>
+                </label>
+                <label for="randomplayback">Zufällige Wiedergabe</label>
+            </div>
+            <div class="menusubitem">
+                <label class="switch">
+                    <input type="checkbox" id="playback-duration-limit" name="playback-duration-limit">
+                    <span class="slider round"></span>
+                </label>
+                <label for="playback-duration-limit">Zeitlimit (s):</label>
+                <input type="number" min="5" id="playback-duration" value="30">
+            </div>
+            <div class="menusubitem">
+                <label class="switch">
+                    <input type="checkbox" id="songinfo" name="songinfo">
+                    <span class="slider round"></span>
+                </label>
+                <label for="songinfo">Song-Infos anzeigen</label>
+            </div>
+            <div class="menusubitem">
+                <label class="switch">
+                    <input type="checkbox" id="appOnlyMode" name="appOnlyMode">
+                    <span class="slider round"></span>
+                </label>
+                <label for="appOnlyMode">Zufall statt Scan</label>
+            </div>
+            <div class="menusubitem songlist-select">
+                <label for="songlist-picker">Song-Liste:</label>
+                <select name="songlist-picker" id="songlist-picker">
+                    <option>hitster-de.csv</option>
+                    <option>hitster-nordics.csv</option>
+                    <option>hitster-de-aaaa0007.csv</option>
+                    <option>hitster-de-aaaa0012.csv</option>
+                    <option>hitster-de-aaaa0015.csv</option>
+                </select>
+            </div>
+            <div class="menusubitem">
+                <button id="revokeConsentBtn" class="btn-secondary">Consent-Einstellungen ändern</button>
+            </div>
+        </div>
+
+        <!-- Credits-Bereich (Ausserhalb des nav-Elements) -->
+        <div id="credits_div" class="credits_div" style="display: none;">
+            <span id="creditlist">
+                <div id="widmung"></div>
+                Original code by andygruber:<br>
+                <a href="https://github.com/andygruber/songseeker/" target="_blank">Songseeker - Github</a>
+            </span>
+        </div>
+
         <div id="qr-reader" style="display: none;">
             <button id="cancelScanButton" class="scan-button cancelScanButton">Cancel Scan</button>
             <video id="qr-video"></video>
