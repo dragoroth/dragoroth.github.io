@@ -53,14 +53,6 @@
                     </div>
                     <div class="menusubitem">
                         <label class="switch">
-                            <input type="checkbox" id="cookies" name="cookies">
-                            <span class="slider round"></span>
-                        </label>
-                        <label for="cookies">Cookies anzeigen</label>
-                    </div>
-                    <div id="cookielist" class="cookielist"></div>
-                    <div class="menusubitem">
-                        <label class="switch">
                             <input type="checkbox" id="appOnlyMode" name="appOnlyMode">
                             <span class="slider round"></span>
                         </label>
@@ -76,6 +68,9 @@
                             <option>hitster-de-aaaa0015.csv</option>
                         </select>
                     </div>
+                    <div class="menusubitem">
+                        <button id="revokeConsentBtn" class="btn-secondary">Consent-Einstellungen ändern</button>
+                    </div>
                 </div>
 
                 <li id="credits" class="menu-main-class"><a href="#"><span>⭐</span> Credits</a></li>
@@ -87,7 +82,8 @@
                     </span>
                 </div>
 
-                <li id="privacy" class="menu-main-class"><a href="privacy_statement.html">Privacy Statement</a></li>
+                <li id="legal-imprint" class="menu-main-class"><a href="imprint.html">Impressum</a></li>
+                <li id="privacy" class="menu-main-class"><a href="privacy_statement.html">Datenschutzerklärung</a></li>
             </ul>
         </nav>
     </header>
@@ -133,7 +129,25 @@
         </div>
     </main>
 
+    <!-- YouTube Player Container -->
     <div id="player"></div>
+
+    <!-- Cookie / Consent Banner -->
+    <div id="consent-banner" class="consent-banner" style="display: none;">
+        <div class="consent-content">
+            <h3>Datenschutz-Einwilligung</h3>
+            <p>
+                Diese Anwendung nutzt den <strong>YouTube-Player</strong> zur Wiedergabe von Audiospuren. 
+                Dabei werden Daten (wie IP-Adresse) an Google/YouTube übertragen und gegebenenfalls Cookies im Browser gespeichert.
+                Ohne Ihre Zustimmung kann der Player nicht geladen werden. Weitere Informationen finden Sie in unserer 
+                <a href="privacy_statement.html" target="_blank">Datenschutzerklärung</a>.
+            </p>
+            <div class="consent-buttons">
+                <button id="acceptConsent" class="btn-consent accept">Akzeptieren & Fortfahren</button>
+                <button id="denyConsent" class="btn-consent deny">Nur technisch notwendige</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="app.js"></script>
 </body>
