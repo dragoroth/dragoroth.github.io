@@ -380,10 +380,7 @@ input:checked + .slider:before {
     margin-left: 5px;
 }
 
-.cookielist {
-    display: none;
-    font-size: 0.75rem;
-    word-break: break-all;
-    padding: 5px;
-    background: #eef;
+#playback-duration:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
