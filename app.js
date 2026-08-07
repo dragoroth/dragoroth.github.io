@@ -4,11 +4,12 @@ let player;
 let playbackTimer = null; 
 let playbackDuration = 30; 
 let qrScanner = null;
-let csvCache = {};
+let csvCache = {}; // path -> { headers, dataRows, columns }
 let lastRandomRow = null;
-let lastCsvHeaders = [];
+let lastCsvColumns = null;
 let appOnlyMode = false;
 let youtubeApiLoaded = false;
+let alertTimer = null;
 
 // Timer-Ring Variablen
 let playStartTime = 0;
@@ -53,31 +54,19 @@ document.addEventListener('DOMContentLoaded', function () {
             const hitsterData = parseHitsterUrl(decodedText);
             if (hitsterData) {
                 try {
-                    const csvContent = await getCachedCsv(`/hitster-${hitsterData.lang}.csv`);
-                    const youtubeLink = lookupYoutubeLink(hitsterData.id, csvContent);
+                    const csv = await getCachedCsv(`/hitster-${hitsterData.lang}.csv`);
+                    const youtubeLink = lookupYoutubeLink(hitsterData.id, csv);
                     if (youtubeLink) youtubeURL = youtubeLink;
                 } catch (error) {
                     console.error("Fehler beim Laden der CSV:", error);
+                    showAlert("Song-Liste konnte nicht geladen werden.");
                 }
             }
         }
 
-        const youtubeLinkData = parseYoutubeLink(youtubeURL);
-        if (youtubeLinkData) {
+        if (youtubeURL && cueYoutubeUrl(youtubeURL)) {
             stopQrScanner();
-            lastDecodedText = ""; 
-
-            const videoIdEl = document.getElementById('video-id');
-            if (videoIdEl) videoIdEl.textContent = youtubeLinkData.videoId;  
-            
-            if (hasConsent()) {
-                setLoadingState(true);
-                ensureYouTubeLoaded(() => {
-                    player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
-                });
-            } else {
-                showConsentBanner();
-            }
+            lastDecodedText = "";
         }
     }
 
@@ -98,26 +87,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const matchNordics = url.match(regexNordics);
         if (matchNordics) return { lang: matchNordics[1], id: matchNordics[2] };
 
-        return null;
-    }
-
-    function lookupYoutubeLink(id, csvContent) {
-        if (!csvContent || csvContent.length === 0) return null;
-        const headers = csvContent[0];
-        lastCsvHeaders = headers;
-        
-        const cardIndex = findColumnIndex(headers, ['card#', 'card', 'id', 'nr', 'card_number', 'cardnumber']);
-        const urlIndex = findColumnIndex(headers, ['url', 'link', 'youtube', 'video']);
-        const targetId = parseInt(id, 10);
-        const lines = csvContent.slice(1);
-
-        if (cardIndex === -1 || urlIndex === -1) return null;
-
-        for (let row of lines) {
-            if (parseInt(row[cardIndex], 10) === targetId) {
-                return row[urlIndex] ? row[urlIndex].trim() : null;
-            }
-        }
         return null;
     }
 
@@ -196,6 +165,234 @@ function ensureYouTubeLoaded(callback) {
             callback();
         }
     }, 100);
+}
+
+function showAlert(message) {
+    const alertBox = document.getElementById('alertBox');
+    if (!alertBox) return;
+    alertBox.innerText = message;
+    alertBox.style.display = 'block';
+    clearTimeout(alertTimer);
+    alertTimer = setTimeout(() => { alertBox.style.display = 'none'; }, 2000);
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+}
+
+/* ---------- CSV: Parsing, Spalten-Abgleich & Caching ---------- */
+
+// Mögliche Spaltenüberschriften je nach CSV-Quelle (Groß-/Kleinschreibung wird ignoriert)
+const CSV_COLUMN_ALIASES = {
+    card: ['card#', 'card', 'id', 'nr', 'card_number', 'cardnumber'],
+    url: ['url', 'link', 'youtube', 'video'],
+    artist: ['artist', 'interpret', 'künstler', 'performer', 'author'],
+    title: ['title', 'titel', 'song', 'track', 'name'],
+    year: ['year', 'jahr', 'release', 'date', 'erscheinungsjahr']
+};
+
+// Ermittelt für jede logische Spalte (card/url/artist/...) den passenden Index
+// anhand der tatsächlichen Kopfzeile, statt sich auf eine feste Spaltenreihenfolge zu verlassen.
+function resolveCsvColumns(headers) {
+    const columns = {};
+    for (const key of Object.keys(CSV_COLUMN_ALIASES)) {
+        columns[key] = findColumnIndex(headers, CSV_COLUMN_ALIASES[key]);
+    }
+    return columns;
+}
+
+// Robuster CSV-Parser (RFC4180-artig): unterstützt Anführungszeichen,
+// darin enthaltene Kommas/Zeilenumbrüche sowie escapte Anführungszeichen ("").
+function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (inQuotes) {
+            if (char === '"' && next === '"') {
+                field += '"';
+                i++;
+            } else if (char === '"') {
+                inQuotes = false;
+            } else {
+                field += char;
+            }
+        } else if (char === '"') {
+            inQuotes = true;
+        } else if (char === ',') {
+            row.push(field);
+            field = '';
+        } else if (char === '\r') {
+            // wird ignoriert, \n beendet die Zeile
+        } else if (char === '\n') {
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = '';
+        } else {
+            field += char;
+        }
+    }
+
+    if (field.length > 0 || row.length > 0) {
+        row.push(field);
+        rows.push(row);
+    }
+
+    return rows.filter(r => r.some(cell => cell.trim() !== ''));
+}
+
+// Lädt eine CSV-Datei (mit Cache), validiert die Kopfzeile und liefert
+// { headers, dataRows, columns } zurück. Wirft einen Fehler, wenn die
+// Datei nicht geladen werden kann oder Pflichtspalten (Card#/URL) fehlen.
+async function getCachedCsv(path) {
+    if (csvCache[path]) {
+        return csvCache[path];
+    }
+
+    const response = await fetch(path);
+    if (!response.ok) {
+        throw new Error(`CSV "${path}" konnte nicht geladen werden (HTTP ${response.status}).`);
+    }
+
+    const text = await response.text();
+    const allRows = parseCsv(text);
+
+    if (allRows.length < 2) {
+        throw new Error(`CSV "${path}" enthält keine verwertbaren Daten.`);
+    }
+
+    const headers = allRows[0];
+    const columns = resolveCsvColumns(headers);
+
+    if (columns.card === -1 || columns.url === -1) {
+        throw new Error(`CSV "${path}": Pflichtspalten "Card#"/"URL" nicht gefunden (gefunden: ${headers.join(', ')}).`);
+    }
+
+    const result = {
+        headers,
+        dataRows: allRows.slice(1),
+        columns
+    };
+
+    csvCache[path] = result;
+    return result;
+}
+
+// Sucht in einer geladenen CSV die Zeile mit passender Card-ID und liefert den YouTube-Link.
+function lookupYoutubeLink(id, csv) {
+    if (!csv || !csv.dataRows || csv.dataRows.length === 0) return null;
+    const { card, url } = csv.columns;
+    if (card === -1 || url === -1) return null;
+
+    const targetId = parseInt(id, 10);
+    for (const row of csv.dataRows) {
+        if (parseInt(row[card], 10) === targetId) {
+            return row[url] ? row[url].trim() : null;
+        }
+    }
+    return null;
+}
+
+/* ---------- YouTube-Link Parsing ---------- */
+
+function parseYoutubeTimeParam(raw) {
+    if (!raw) return 0;
+    if (/^\d+$/.test(raw)) return parseInt(raw, 10);
+    const match = raw.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+    if (!match) return 0;
+    const h = parseInt(match[1] || '0', 10);
+    const m = parseInt(match[2] || '0', 10);
+    const s = parseInt(match[3] || '0', 10);
+    return h * 3600 + m * 60 + s;
+}
+
+// Extrahiert Video-ID und optionalen Startzeitpunkt aus einer YouTube-URL.
+// Unterstützt youtube.com/watch?v=, youtu.be/, music.youtube.com und /embed/.
+function parseYoutubeLink(url) {
+    if (!url) return null;
+    try {
+        const urlObj = new URL(url);
+        let videoId = null;
+
+        if (urlObj.hostname === 'youtu.be') {
+            videoId = urlObj.pathname.slice(1);
+        } else if (urlObj.hostname.endsWith('youtube.com')) {
+            videoId = urlObj.searchParams.get('v');
+            if (!videoId && urlObj.pathname.startsWith('/embed/')) {
+                videoId = urlObj.pathname.split('/embed/')[1];
+            }
+        }
+
+        if (!videoId) return null;
+
+        const rawStart = urlObj.searchParams.get('t') || urlObj.searchParams.get('start');
+        return { videoId, startTime: parseYoutubeTimeParam(rawStart) };
+    } catch (error) {
+        return null;
+    }
+}
+
+// Bereitet einen YouTube-Link fürs Abspielen vor (Video-ID anzeigen, Consent prüfen, cuen).
+// Gibt true zurück, wenn die URL gültig war, sonst false.
+function cueYoutubeUrl(youtubeURL) {
+    const youtubeLinkData = parseYoutubeLink(youtubeURL);
+    if (!youtubeLinkData) return false;
+
+    const videoIdEl = document.getElementById('video-id');
+    if (videoIdEl) videoIdEl.textContent = youtubeLinkData.videoId;
+
+    if (hasConsent()) {
+        setLoadingState(true);
+        ensureYouTubeLoaded(() => {
+            player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
+        });
+    } else {
+        showConsentBanner();
+    }
+    return true;
+}
+
+// Wählt zufällig einen Song aus der aktuell gewählten Song-Liste (Zufall-statt-Scan-Modus)
+// und cued ihn. Setzt lastRandomRow/lastCsvColumns für den Solve-Button.
+async function getRandomPlaylistSong() {
+    const picker = document.getElementById('songlist-picker');
+    const selectedFile = (picker && picker.value) ? picker.value : 'hitster-de.csv';
+    const path = `/${selectedFile}`;
+
+    let csv;
+    try {
+        csv = await getCachedCsv(path);
+    } catch (error) {
+        console.error('Fehler beim Laden der CSV:', error);
+        showAlert('Song-Liste konnte nicht geladen werden.');
+        return;
+    }
+
+    if (!csv.dataRows.length) {
+        showAlert('Song-Liste ist leer.');
+        return;
+    }
+
+    const { url } = csv.columns;
+    const randomIndex = Math.floor(Math.random() * csv.dataRows.length);
+    const row = csv.dataRows[randomIndex];
+    const youtubeURL = row[url] ? row[url].trim() : '';
+
+    if (!youtubeURL || !cueYoutubeUrl(youtubeURL)) {
+        showAlert('Kein gültiger YouTube-Link in der Song-Liste gefunden.');
+        return;
+    }
+
+    lastRandomRow = row;
+    lastCsvColumns = csv.columns;
 }
 
 function checkUrlParameters() {
@@ -453,8 +650,6 @@ function closeMenuAndOverlays() {
 
 // Event Listeners Setup
 function setupEventListeners() {
-    let timerAlertMessage = null;
-
     // Consent Banner Listeners
     const acceptBtn = document.getElementById('acceptConsent');
     if (acceptBtn) {
@@ -494,13 +689,7 @@ function setupEventListeners() {
                 const playerState = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
                 
                 if (playerState === -1) {
-                    const alertBox = document.getElementById('alertBox');
-                    if (alertBox) {
-                        alertBox.innerText = appOnlyMode ? "Bitte erst 'Next' klicken!" : "Bitte erst scannen!";
-                        alertBox.style.display = "block";
-                        clearTimeout(timerAlertMessage);
-                        timerAlertMessage = setTimeout(() => { alertBox.style.display = "none"; }, 2000);
-                    }
+                    showAlert(appOnlyMode ? "Bitte erst 'Next' klicken!" : "Bitte erst scannen!");
                     return;
                 }
                 playVideoWithSettingsOptions();
@@ -540,18 +729,17 @@ function setupEventListeners() {
     const solveBtn = document.getElementById('solveButton');
     if (solveBtn) {
         solveBtn.addEventListener('click', function() {
-            if (lastRandomRow && lastCsvHeaders) {
-                const artistIdx = findColumnIndex(lastCsvHeaders, ['artist', 'interpret', 'künstler', 'performer', 'author']);
-                const titleIdx = findColumnIndex(lastCsvHeaders, ['title', 'titel', 'song', 'track', 'name']);
-                const yearIdx = findColumnIndex(lastCsvHeaders, ['year', 'jahr', 'release', 'date', 'erscheinungsjahr']);
+            if (lastRandomRow && lastCsvColumns) {
+                const { artist: artistIdx, title: titleIdx, year: yearIdx } = lastCsvColumns;
 
-                const artist = (artistIdx !== -1 && lastRandomRow[artistIdx]) ? lastRandomRow[artistIdx] : (lastRandomRow[1] || '');
-                const title = (titleIdx !== -1 && lastRandomRow[titleIdx]) ? lastRandomRow[titleIdx] : (lastRandomRow[2] || '');
-                const year = (yearIdx !== -1 && lastRandomRow[yearIdx]) ? lastRandomRow[yearIdx] : (lastRandomRow[6] || lastRandomRow[3] || '');
+                const artist = (artistIdx !== -1 && lastRandomRow[artistIdx]) ? lastRandomRow[artistIdx] : '';
+                const title = (titleIdx !== -1 && lastRandomRow[titleIdx]) ? lastRandomRow[titleIdx] : '';
+                const year = (yearIdx !== -1 && lastRandomRow[yearIdx]) ? lastRandomRow[yearIdx] : '';
 
                 const overlayText = document.getElementById("solveButton-overlay-text");
                 const overlay = document.getElementById("solveButton-overlay");
-                if (overlayText) overlayText.innerHTML = `${artist}<br>${title}<br>${year}`;
+                // escapeHtml verhindert, dass HTML/JS aus der CSV (z.B. manipulierte Song-Liste) ausgeführt wird
+                if (overlayText) overlayText.innerHTML = `${escapeHtml(artist)}<br>${escapeHtml(title)}<br>${escapeHtml(year)}`;
                 if (overlay) overlay.style.display = "block";
             }
         });
