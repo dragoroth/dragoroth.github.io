@@ -10,6 +10,10 @@ let lastCsvColumns = null;
 let appOnlyMode = false;
 let youtubeApiLoaded = false;
 let alertTimer = null;
+let pendingPlayAfterCue = false; // erzwingt Abspielen nach dem Cuen, unabhängig vom Autoplay-Setting
+
+const RECENT_HISTORY_SIZE = 15;
+let recentlyPlayedUrls = []; // Wiederholungssperre für den Zufallsmodus (FIFO, letzte 15 Songs)
 
 // Timer-Ring Variablen
 let playStartTime = 0;
@@ -32,6 +36,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     checkUrlParameters();
     checkConsent();
+    applyInitialSettingsState();
 
     // QR-Scanner Initialisierung
     if (video) {
@@ -48,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function handleScannedLink(decodedText) {
         let youtubeURL = "";
-        if (isYoutubeLink(decodedText)) {
+        if (parseYoutubeLink(decodedText)) {
             youtubeURL = decodedText;
         } else if (isHitsterLink(decodedText)) {
             const hitsterData = parseHitsterUrl(decodedText);
@@ -72,10 +77,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function isHitsterLink(url) {
         return /^(?:http:\/\/|https:\/\/)?(www\.hitstergame|app\.hitsternordics)\.com\/.+/.test(url);
-    }
-
-    function isYoutubeLink(url) {
-        return url.startsWith("https://www.youtube.com") || url.startsWith("https://youtu.be") || url.startsWith("https://music.youtube.com/");
     }
 
     function parseHitsterUrl(url) {
@@ -135,7 +136,8 @@ function loadYouTubeApi() {
             width: '0',
             events: {
                 'onReady': () => {},
-                'onStateChange': onPlayerStateChange
+                'onStateChange': onPlayerStateChange,
+                'onError': onPlayerError
             }
         });
     };
@@ -158,14 +160,30 @@ function ensureYouTubeLoaded(callback) {
     if (!youtubeApiLoaded) {
         loadYouTubeApi();
     }
-    
+
+    const maxAttempts = 100; // 100 x 100ms = 10s Timeout
+    let attempts = 0;
+
     const checkInterval = setInterval(() => {
+        attempts++;
         if (player && typeof player.cueVideoById === 'function') {
             clearInterval(checkInterval);
             callback();
+            return;
+        }
+        if (attempts >= maxAttempts) {
+            clearInterval(checkInterval);
+            setLoadingState(false);
+            showAlert('YouTube-Player konnte nicht geladen werden. Bitte Verbindung prüfen.');
         }
     }, 100);
 }
+
+// Fängt unerwartete Fehler (z.B. in async-Funktionen) ab, statt sie nur in der Konsole verschwinden zu lassen
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unbehandelter Fehler:', event.reason);
+    showAlert('Es ist ein unerwarteter Fehler aufgetreten.');
+});
 
 function showAlert(message) {
     const alertBox = document.getElementById('alertBox');
@@ -315,7 +333,7 @@ function parseYoutubeTimeParam(raw) {
 }
 
 // Extrahiert Video-ID und optionalen Startzeitpunkt aus einer YouTube-URL.
-// Unterstützt youtube.com/watch?v=, youtu.be/, music.youtube.com und /embed/.
+// Unterstützt youtube.com/watch?v=, youtu.be/, music.youtube.com, m.youtube.com und /embed/.
 function parseYoutubeLink(url) {
     if (!url) return null;
     try {
@@ -324,7 +342,7 @@ function parseYoutubeLink(url) {
 
         if (urlObj.hostname === 'youtu.be') {
             videoId = urlObj.pathname.slice(1);
-        } else if (urlObj.hostname.endsWith('youtube.com')) {
+        } else if (urlObj.hostname === 'youtube.com' || urlObj.hostname.endsWith('.youtube.com')) {
             videoId = urlObj.searchParams.get('v');
             if (!videoId && urlObj.pathname.startsWith('/embed/')) {
                 videoId = urlObj.pathname.split('/embed/')[1];
@@ -341,8 +359,9 @@ function parseYoutubeLink(url) {
 }
 
 // Bereitet einen YouTube-Link fürs Abspielen vor (Video-ID anzeigen, Consent prüfen, cuen).
+// Mit thenPlay:true wird nach dem Cuen automatisch abgespielt, unabhängig vom Autoplay-Setting.
 // Gibt true zurück, wenn die URL gültig war, sonst false.
-function cueYoutubeUrl(youtubeURL) {
+function cueYoutubeUrl(youtubeURL, { thenPlay = false } = {}) {
     const youtubeLinkData = parseYoutubeLink(youtubeURL);
     if (!youtubeLinkData) return false;
 
@@ -352,6 +371,7 @@ function cueYoutubeUrl(youtubeURL) {
     if (hasConsent()) {
         setLoadingState(true);
         ensureYouTubeLoaded(() => {
+            if (thenPlay) pendingPlayAfterCue = true;
             player.cueVideoById(youtubeLinkData.videoId, youtubeLinkData.startTime || 0);
         });
     } else {
@@ -360,9 +380,32 @@ function cueYoutubeUrl(youtubeURL) {
     return true;
 }
 
+// Wählt eine zufällige Zeile, die nicht unter den zuletzt gespielten RECENT_HISTORY_SIZE Songs ist.
+// Fällt auf die volle Liste zurück, falls die Playlist zu kurz ist, um die Sperre einzuhalten.
+function pickRandomRow(dataRows, urlColumnIndex) {
+    const candidates = urlColumnIndex === -1
+        ? dataRows
+        : dataRows.filter(row => {
+            const url = row[urlColumnIndex] ? row[urlColumnIndex].trim() : '';
+            return url && !recentlyPlayedUrls.includes(url);
+        });
+
+    const pool = candidates.length > 0 ? candidates : dataRows;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function rememberPlayedUrl(url) {
+    if (!url) return;
+    recentlyPlayedUrls.push(url);
+    if (recentlyPlayedUrls.length > RECENT_HISTORY_SIZE) {
+        recentlyPlayedUrls.shift();
+    }
+}
+
 // Wählt zufällig einen Song aus der aktuell gewählten Song-Liste (Zufall-statt-Scan-Modus)
 // und cued ihn. Setzt lastRandomRow/lastCsvColumns für den Solve-Button.
-async function getRandomPlaylistSong() {
+// Mit { thenPlay: true } wird der Song direkt abgespielt (z.B. wenn über den Play-Button ausgelöst).
+async function getRandomPlaylistSong({ thenPlay = false } = {}) {
     const picker = document.getElementById('songlist-picker');
     const selectedFile = (picker && picker.value) ? picker.value : 'hitster-de.csv';
     const path = `/${selectedFile}`;
@@ -382,15 +425,15 @@ async function getRandomPlaylistSong() {
     }
 
     const { url } = csv.columns;
-    const randomIndex = Math.floor(Math.random() * csv.dataRows.length);
-    const row = csv.dataRows[randomIndex];
-    const youtubeURL = row[url] ? row[url].trim() : '';
+    const row = pickRandomRow(csv.dataRows, url);
+    const youtubeURL = (url !== -1 && row[url]) ? row[url].trim() : '';
 
-    if (!youtubeURL || !cueYoutubeUrl(youtubeURL)) {
+    if (!youtubeURL || !cueYoutubeUrl(youtubeURL, { thenPlay })) {
         showAlert('Kein gültiger YouTube-Link in der Song-Liste gefunden.');
         return;
     }
 
+    rememberPlayedUrl(youtubeURL);
     lastRandomRow = row;
     lastCsvColumns = csv.columns;
 }
@@ -417,6 +460,29 @@ function enableAppOnlyMode(enable) {
     if (solveBtn) solveBtn.style.display = enable ? 'block' : 'none';
 }
 
+// Wendet den Anzeigezustand von Settings-Toggles beim Start an (Song-Infos, Zeitlimit-Feld)
+function applyInitialSettingsState() {
+    updateSongInfoVisibility();
+    updatePlaybackDurationInputState();
+}
+
+// "Song-Infos anzeigen": blendet Video-ID/-Titel/-Dauer ein bzw. aus
+function updateSongInfoVisibility() {
+    const checkbox = document.getElementById('songinfo');
+    const show = checkbox ? checkbox.checked : false;
+    ['videoid', 'videotitle', 'videoduration'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = show ? 'block' : 'none';
+    });
+}
+
+// Deaktiviert das Zeitlimit-Eingabefeld, solange der zugehörige Toggle aus ist
+function updatePlaybackDurationInputState() {
+    const toggle = document.getElementById('playback-duration-limit');
+    const input = document.getElementById('playback-duration');
+    if (input) input.disabled = toggle ? !toggle.checked : true;
+}
+
 function setLoadingState(loading) {
     const playBtn = document.getElementById('startstop-video');
     if (!playBtn) return;
@@ -425,6 +491,18 @@ function setLoadingState(loading) {
     } else {
         playBtn.classList.remove('is-loading');
     }
+}
+
+function onPlayerError(event) {
+    setLoadingState(false);
+    isPlaying = false;
+    const playBtn = document.getElementById('startstop-video');
+    if (playBtn) playBtn.classList.remove('is-playing');
+    if (playbackTimer) {
+        clearTimeout(playbackTimer);
+        playbackTimer = null;
+    }
+    showAlert('Video konnte nicht abgespielt werden (evtl. gesperrt oder gelöscht).');
 }
 
 function onPlayerStateChange(event) {
@@ -446,7 +524,8 @@ function onPlayerStateChange(event) {
         if (titleEl) titleEl.textContent = videoData.title || '';
         if (durationEl) durationEl.textContent = formatDuration(player.getDuration());
 
-        if (autoPlayChecked) {
+        if (autoPlayChecked || pendingPlayAfterCue) {
+            pendingPlayAfterCue = false;
             playVideoWithSettingsOptions();
         }
     }
@@ -676,6 +755,17 @@ function setupEventListeners() {
         });
     }
 
+    // Settings-Toggles: Song-Infos anzeigen / Zeitlimit-Feld aktivieren
+    const songInfoToggle = document.getElementById('songinfo');
+    if (songInfoToggle) {
+        songInfoToggle.addEventListener('change', updateSongInfoVisibility);
+    }
+
+    const durationLimitToggle = document.getElementById('playback-duration-limit');
+    if (durationLimitToggle) {
+        durationLimitToggle.addEventListener('change', updatePlaybackDurationInputState);
+    }
+
     // Play/Stop Button
     const playStopBtn = document.getElementById('startstop-video');
     if (playStopBtn) {
@@ -689,7 +779,11 @@ function setupEventListeners() {
                 const playerState = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
                 
                 if (playerState === -1) {
-                    showAlert(appOnlyMode ? "Bitte erst 'Next' klicken!" : "Bitte erst scannen!");
+                    if (appOnlyMode) {
+                        getRandomPlaylistSong({ thenPlay: true });
+                        return;
+                    }
+                    showAlert("Bitte erst scannen!");
                     return;
                 }
                 playVideoWithSettingsOptions();
